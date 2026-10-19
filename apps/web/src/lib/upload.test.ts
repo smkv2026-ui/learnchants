@@ -1,14 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('./api', () => ({
-  api: {
-    createUploadSession: vi.fn(async () => ({ mediaId: 'm1', uploadUrl: '/mock-upload/s1', chunkSize: 256 * 1024 })),
-    finalizeUpload: vi.fn(async () => ({ mediaId: 'm1', submissionId: 's9' })),
-  },
-}));
-
-import { api } from './api';
-import { nextOffset, uploadMedia } from './upload';
+import { nextOffset, resumableUpload } from './upload';
 
 type Handler = (range: string, body: Blob | null) => { status: number; range?: string } | 'network-error';
 
@@ -40,6 +32,7 @@ class FakeXHR {
       if (res === 'network-error') return this.onerror?.();
       this.status = res.status;
       if (res.range) this.resHeaders.Range = res.range;
+      (this as unknown as { responseText: string }).responseText = res.status === 200 ? '{"id":"f1"}' : '';
       this.upload.onprogress?.({ loaded: body?.size ?? 0 });
       this.onload?.();
     }, 0);
@@ -63,20 +56,20 @@ describe('nextOffset', () => {
   });
 });
 
-describe('uploadMedia', () => {
-  it('uploads in chunks then finalizes', async () => {
+const opts = { chunkSize: 256 * 1024 };
+
+describe('resumableUpload', () => {
+  it('uploads in chunks and returns the final body', async () => {
     const size = 600 * 1024;
     handler = (range) => {
       const end = Number(/-(\d+)\//.exec(range)![1]);
       return end === size - 1 ? { status: 200 } : { status: 308, range: `bytes=0-${end}` };
     };
     const progress: number[] = [];
-    const res = await uploadMedia(new Blob([new Uint8Array(size)], { type: 'audio/webm' }), { purpose: 'submission', playlistId: 'p', verseId: 'v' }, { onProgress: (p) => progress.push(p), durationSec: 3 });
-    expect(res).toEqual({ mediaId: 'm1', submissionId: 's9' });
+    const res = await resumableUpload('/s1', new Blob([new Uint8Array(size)], { type: 'audio/webm' }), { ...opts, onProgress: (p) => progress.push(p) });
+    expect(res).toBe('{"id":"f1"}');
     expect(ranges).toEqual(['bytes 0-262143/614400', 'bytes 262144-524287/614400', 'bytes 524288-614399/614400']);
     expect(progress.at(-1)).toBe(1);
-    expect(api.createUploadSession).toHaveBeenCalledWith(expect.objectContaining({ mimeType: 'audio/webm', size }));
-    expect(api.finalizeUpload).toHaveBeenCalledWith({ mediaId: 'm1', durationSec: 3 });
   });
 
   it('resumes from the server offset after a network error', async () => {
@@ -91,12 +84,12 @@ describe('uploadMedia', () => {
       const end = Number(/-(\d+)\//.exec(range)![1]);
       return end === size - 1 ? { status: 200 } : { status: 308, range: `bytes=0-${end}` };
     };
-    await uploadMedia(new Blob([new Uint8Array(size)]), { purpose: 'verse_audio', playlistId: 'p', verseId: 'v', mimeType: 'audio/mp4' });
+    await resumableUpload('/s1', new Blob([new Uint8Array(size)]), opts);
     expect(ranges).toEqual(['bytes 0-262143/524288', 'bytes 262144-524287/524288', 'bytes */524288', 'bytes 262144-524287/524288']);
   });
 
   it('fails fast on an expired session', async () => {
     handler = () => ({ status: 404 });
-    await expect(uploadMedia(new Blob([new Uint8Array(10)]), { purpose: 'submission', playlistId: 'p' })).rejects.toThrow(/expired/);
+    await expect(resumableUpload('/s1', new Blob([new Uint8Array(10)]), opts)).rejects.toThrow(/expired/);
   });
 });

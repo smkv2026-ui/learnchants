@@ -1,7 +1,7 @@
 import { useMediaUrl } from '@/hooks/useMediaUrl';
 import { Spinner } from '@/components/ui';
 
-/** Plain player for submissions / replies (fetches a short-lived signed URL). */
+/** Plain player for submissions / replies (Firestore-stored file or Drive link). */
 export function MediaPlayer({ mediaId, kind }: { mediaId: string; kind?: 'audio' | 'video' | null }) {
   const url = useMediaUrl(mediaId);
   if (url.isLoading) return <div className="flex h-12 items-center text-muted"><Spinner /></div>;

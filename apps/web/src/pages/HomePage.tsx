@@ -112,7 +112,7 @@ export function HomePage() {
                   key={p.id}
                   index={i}
                   playlist={p}
-                  progress={prog ? playlistPct(prog) : null}
+                  progress={prog ? playlistPct(prog, p.verseCount) : null}
                   locked={p.access === 'paid' && !granted.has(p.id)}
                 />
               );

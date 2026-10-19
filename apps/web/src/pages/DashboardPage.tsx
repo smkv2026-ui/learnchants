@@ -3,21 +3,26 @@ import { Link } from 'react-router-dom';
 import { collection, doc, limit, orderBy, query, where } from 'firebase/firestore';
 import { motion } from 'framer-motion';
 import { db } from '@/lib/firebase';
-import { computeStreak, nodePct, pct, playlistPct } from '@/lib/progress';
+import { computeStreak, nodeApproved, pct, playlistPct } from '@/lib/progress';
 import { byOrder } from '@/lib/tree';
 import { timeAgo } from '@/lib/format';
-import type { Progress, Submission, WithId } from '@/lib/types';
+import type { Playlist, Progress, Submission, WithId } from '@/lib/types';
 import { useAuth } from '@/stores/auth';
 import { useCollection, useDoc } from '@/hooks/useFirestore';
-import { useMyProgress, useNodes } from '@/hooks/useLearner';
+import { useMyProgress, useNodes, usePlaylist, useVerseStatuses, useVerses } from '@/hooks/useLearner';
 import { Badge, Button, Card, EmptyState, Icon, ListSkeleton, ProgressRing, StatTile, StatusChip } from '@/components/ui';
 import { Page } from '@/components/layout/Page';
 
 
 function PlaylistProgress({ progress, index }: { progress: WithId<Progress>; index: number }) {
   const nodes = useNodes(progress.pid);
+  const verses = useVerses(progress.pid);
+  const playlist = usePlaylist(progress.pid);
+  const statuses = useVerseStatuses(progress.pid);
+  const statusMap = useMemo(() => new Map(statuses.data.map((s) => [s.id, s.status as string])), [statuses.data]);
   const top = nodes.data.filter((n) => !n.parentId).sort(byOrder);
-  const value = playlistPct(progress);
+  const total = playlist.data?.verseCount ?? 0;
+  const value = playlistPct(progress, total);
   return (
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.06 }}>
       <Card className="p-4 sm:p-5">
@@ -25,21 +30,24 @@ function PlaylistProgress({ progress, index }: { progress: WithId<Progress>; ind
           <ProgressRing value={value} size={72} stroke={7} />
           <div className="min-w-0 flex-1">
             <Link to={`/p/${progress.pid}`} className="block truncate text-2xl font-semibold hover:text-primary">{progress.title ?? 'Playlist'}</Link>
-            <p className="text-sm text-muted">{progress.approvedCount} / {progress.totalCount} verses approved</p>
+            <p className="text-sm text-muted">{progress.approvedCount} / {total} verses approved</p>
             {value === 100 && <Badge tone="gold" className="mt-1"><Icon name="award" size={12} /> Completed</Badge>}
           </div>
         </div>
         {top.length > 0 && (
           <div className="mt-4 grid grid-cols-1 gap-2 min-[420px]:grid-cols-2 sm:gap-3 lg:grid-cols-3">
-            {top.map((n) => (
+            {top.map((n) => {
+              const done = nodeApproved(n, nodes.data, verses.data, statusMap);
+              return (
               <Link key={n.id} to={`/p/${progress.pid}/n/${n.id}`} className="flex items-center gap-3 rounded-2xl bg-ink/[.04] p-3 transition hover:bg-ink/[.08]">
-                <ProgressRing value={nodePct(progress, n)} size={44} stroke={4} />
+                <ProgressRing value={pct(done, n.verseCount ?? 0)} size={44} stroke={4} />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-semibold">{n.name}</span>
-                  <span className="text-xs text-muted">{progress.nodeApproved?.[n.id] ?? 0}/{n.verseCount ?? 0}</span>
+                  <span className="text-xs text-muted">{done}/{n.verseCount ?? 0}</span>
                 </span>
               </Link>
-            ))}
+              );
+            })}
           </div>
         )}
       </Card>
@@ -55,10 +63,14 @@ export default function DashboardPage() {
     uid ? query(collection(db, 'submissions'), where('uid', '==', uid), orderBy('createdAt', 'desc'), limit(8)) : null,
     `recent-${uid}`,
   );
-  const totals = useMemo(
-    () => progress.data.reduce((a, p) => ({ approved: a.approved + (p.approvedCount || 0), total: a.total + (p.totalCount || 0) }), { approved: 0, total: 0 }),
-    [progress.data],
-  );
+  const playlists = useCollection<Playlist>(query(collection(db, 'playlists'), where('published', '==', true)), 'dash-published');
+  const totals = useMemo(() => {
+    const counts = new Map(playlists.data.map((p) => [p.id, p.verseCount ?? 0]));
+    return progress.data.reduce(
+      (a, p) => ({ approved: a.approved + (p.approvedCount || 0), total: a.total + (counts.get(p.pid) ?? 0) }),
+      { approved: 0, total: 0 },
+    );
+  }, [progress.data, playlists.data]);
   const pending = recent.data.filter((s) => s.status === 'SUBMITTED').length;
   const streak = computeStreak(stats.data?.activityDays);
 

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
-import { onIdTokenChanged, signOut, type User } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
+import { onAuthStateChanged, signOut, type User } from 'firebase/auth';
+import { doc, getDoc, onSnapshot, type Unsubscribe } from 'firebase/firestore';
+import { auth, db } from '@/lib/firebase';
 import type { Role } from '@/lib/types';
 
 interface AuthState {
@@ -11,10 +12,10 @@ interface AuthState {
   logout: () => Promise<void>;
 }
 
-async function roleOf(user: User, force = false): Promise<Role> {
-  const res = await user.getIdTokenResult(force);
-  const role = res.claims.role as Role | undefined;
-  return role === 'ADMIN' || role === 'SUPER_ADMIN' ? role : 'USER';
+/** Role comes from an active ``adminUsers/{uid}`` record (enforced by Firestore rules). */
+function roleFrom(data: { role?: string; status?: string } | undefined): Role {
+  if (!data || data.status !== 'active') return 'USER';
+  return data.role === 'SUPER_ADMIN' ? 'SUPER_ADMIN' : data.role === 'ADMIN' ? 'ADMIN' : 'USER';
 }
 
 export const useAuth = create<AuthState>((set, get) => ({
@@ -24,7 +25,8 @@ export const useAuth = create<AuthState>((set, get) => ({
   refreshClaims: async () => {
     const user = get().user ?? auth.currentUser;
     if (!user) return 'USER';
-    const role = await roleOf(user, true);
+    const snap = await getDoc(doc(db, 'adminUsers', user.uid)).catch(() => null);
+    const role = roleFrom(snap?.data());
     set({ role, user });
     return role;
   },
@@ -34,16 +36,21 @@ export const useAuth = create<AuthState>((set, get) => ({
   },
 }));
 
-onIdTokenChanged(auth, async (user) => {
+let unsubAdmin: Unsubscribe | null = null;
+
+onAuthStateChanged(auth, (user) => {
+  unsubAdmin?.();
+  unsubAdmin = null;
   if (!user) {
     useAuth.setState({ user: null, role: null, ready: true });
     return;
   }
-  try {
-    useAuth.setState({ user, role: await roleOf(user), ready: true });
-  } catch {
-    useAuth.setState({ user, role: 'USER', ready: true });
-  }
+  useAuth.setState({ user, ready: false });
+  unsubAdmin = onSnapshot(
+    doc(db, 'adminUsers', user.uid),
+    (snap) => useAuth.setState({ user, role: roleFrom(snap.data()), ready: true }),
+    () => useAuth.setState({ user, role: 'USER', ready: true }),
+  );
 });
 
 export const isAdminRole = (role: Role | null | undefined) => role === 'ADMIN' || role === 'SUPER_ADMIN';

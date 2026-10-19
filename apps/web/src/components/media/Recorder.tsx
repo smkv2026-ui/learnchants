@@ -29,7 +29,7 @@ interface RecorderProps {
 }
 
 /** Browser recorder with live waveform / camera preview, timer, re-record and preview. */
-export function Recorder({ kind, rounds, maxSeconds = 600, confirmLabel = 'Use this recording', busy, onConfirm, onDiscard }: RecorderProps) {
+export function Recorder({ kind, rounds, maxSeconds: maxSecondsProp, confirmLabel = 'Use this recording', busy, onConfirm, onDiscard }: RecorderProps) {
   const [phase, setPhase] = useState<Phase>('idle');
   const [error, setError] = useState('');
   const [elapsed, setElapsed] = useState(0);
@@ -44,6 +44,8 @@ export function Recorder({ kind, rounds, maxSeconds = 600, confirmLabel = 'Use t
   const tick = useRef<number>();
   const disposeAnalyser = useRef<() => void>();
   const preview = useRef<HTMLVideoElement>(null);
+  // Bitrates keep recordings within the 8 MB built-in storage limit (~3 MB/min video, ~0.5 MB/min audio).
+  const maxSeconds = maxSecondsProp ?? (kind === 'video' ? 150 : 600);
 
   const cleanup = () => {
     window.clearInterval(tick.current);
@@ -70,7 +72,7 @@ export function Recorder({ kind, rounds, maxSeconds = 600, confirmLabel = 'Use t
       await resumeAudio();
       const s = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-        video: kind === 'video' ? { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } } : false,
+        video: kind === 'video' ? { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 360 }, frameRate: { ideal: 24 } } : false,
       });
       stream.current = s;
       if (kind === 'video' && preview.current) {
@@ -98,7 +100,11 @@ export function Recorder({ kind, rounds, maxSeconds = 600, confirmLabel = 'Use t
 
   const startRecording = (s: MediaStream) => {
     const mimeType = pickMimeType(kind);
-    const mr = new MediaRecorder(s, mimeType ? { mimeType, audioBitsPerSecond: 128_000 } : undefined);
+    const mr = new MediaRecorder(s, {
+      ...(mimeType ? { mimeType } : {}),
+      audioBitsPerSecond: 64_000,
+      ...(kind === 'video' ? { videoBitsPerSecond: 350_000 } : {}),
+    });
     chunks.current = [];
     mr.ondataavailable = (e) => e.data.size && chunks.current.push(e.data);
     mr.onstop = () => {

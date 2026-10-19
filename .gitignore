@@ -4,8 +4,6 @@ dev-dist/
 .env
 .env.local
 *.local
-functions/venv/
-functions/.venv/
 __pycache__/
 *.pyc
 .pytest_cache/
@@ -15,13 +13,8 @@ firestore-debug.log
 ui-debug.log
 pubsub-debug.log
 database-debug.log
-.mock_drive/
 emulator-data/
 coverage/
 .DS_Store
-functions/.secret.local
 
-# per-project function params (contain your email); examples are committed
-functions/.env.*
-!functions/.env.example
-!functions/.env.demo-learnchants
+.venv/

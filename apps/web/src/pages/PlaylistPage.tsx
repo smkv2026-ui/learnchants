@@ -105,9 +105,9 @@ export default function PlaylistPage() {
               {p.description && <p className="mt-4 whitespace-pre-line text-muted">{p.description}</p>}
               {user && progress.data && (
                 <div className="mt-6 flex items-center gap-4">
-                  <ProgressRing value={playlistPct(progress.data)} size={72} />
+                  <ProgressRing value={playlistPct(progress.data, p.verseCount)} size={72} />
                   <div className="text-sm">
-                    <p className="font-semibold">{progress.data.approvedCount} of {progress.data.totalCount} verses approved</p>
+                    <p className="font-semibold">{progress.data.approvedCount} of {p.verseCount ?? 0} verses approved</p>
                     <p className="text-muted">Keep going, every verse counts.</p>
                   </div>
                 </div>
@@ -117,7 +117,7 @@ export default function PlaylistPage() {
         </Card>
       ) : (
         <div className="mb-6 flex items-center gap-4">
-          <ProgressRing value={current ? nodePct(progress.data, current) : 0} size={64} />
+          <ProgressRing value={current ? nodePct(current, nodes.data, verses.data, statusMap) : 0} size={64} />
           <div>
             <h1 className="text-4xl font-semibold">{current?.name ?? 'Section'}</h1>
             {current?.description && <p className="text-muted">{current.description}</p>}
@@ -167,7 +167,7 @@ export default function PlaylistPage() {
                     to={`/p/${pid}/n/${n.id}`}
                     className="glass group flex items-center gap-4 rounded-2xl p-4 transition hover:-translate-y-0.5 hover:shadow-glow"
                   >
-                    <ProgressRing value={nodePct(progress.data, n)} size={52} stroke={5} />
+                    <ProgressRing value={nodePct(n, nodes.data, verses.data, statusMap)} size={52} stroke={5} />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-lg font-semibold">{n.name}</p>
                       <p className="text-xs text-muted">{n.verseCount ?? 0} verses{n.description ? ` · ${n.description}` : ''}</p>

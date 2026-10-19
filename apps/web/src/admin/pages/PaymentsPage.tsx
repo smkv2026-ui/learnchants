@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { collection, limit, orderBy, query, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { api, errorMessage } from '@/lib/api';
+import { errorMessage } from '@/lib/errors';
+import { reviewPayment } from '@/lib/ops/payments';
 import { formatInr } from '@/lib/upi';
 import { timeAgo } from '@/lib/format';
 import type { PaymentRequest, WithId } from '@/lib/types';
@@ -33,7 +34,7 @@ export default function PaymentsPage() {
   const decide = async (r: WithId<PaymentRequest>, decision: 'APPROVED' | 'REJECTED', why?: string) => {
     setBusy(r.id);
     try {
-      await api.reviewPayment({ requestId: r.id, decision, reason: why });
+      await reviewPayment(r, decision, why);
       toast.success(decision === 'APPROVED' ? `Access granted to ${r.userName ?? 'learner'}` : 'Request rejected');
       setRejecting(null);
       setReason('');

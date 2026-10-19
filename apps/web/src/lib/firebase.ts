@@ -7,8 +7,6 @@ import {
   persistentLocalCache,
   persistentMultipleTabManager,
 } from 'firebase/firestore';
-import { connectFunctionsEmulator, getFunctions } from 'firebase/functions';
-import { connectStorageEmulator, getStorage } from 'firebase/storage';
 
 const env = import.meta.env;
 export const useEmulators = env.VITE_USE_EMULATORS === 'true';
@@ -44,12 +42,8 @@ export const db = initializeFirestore(app, {
   ignoreUndefinedProperties: true,
 });
 
-export const functions = getFunctions(app, 'us-central1');
-export const storage = getStorage(app);
 
 if (useEmulators) {
   connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
   connectFirestoreEmulator(db, '127.0.0.1', 8080);
-  connectFunctionsEmulator(functions, '127.0.0.1', 5001);
-  connectStorageEmulator(storage, '127.0.0.1', 9199);
 }

@@ -1,16 +1,36 @@
-import type { NodeDoc, Progress, WithId } from './types';
+import type { NodeDoc, Progress, Verse, WithId } from './types';
 
 export function pct(done: number, total: number): number {
   if (!total) return 0;
   return Math.max(0, Math.min(100, Math.round((done / total) * 100)));
 }
 
-export function playlistPct(p?: Progress | null): number {
-  return p ? pct(p.approvedCount, p.totalCount) : 0;
+export function playlistPct(p: Progress | null | undefined, total: number | null | undefined): number {
+  return p ? pct(p.approvedCount, total ?? 0) : 0;
 }
 
-export function nodePct(p: Progress | null | undefined, node: WithId<NodeDoc>): number {
-  return pct(p?.nodeApproved?.[node.id] ?? 0, node.verseCount ?? 0);
+/** Approved verses inside ``node`` (any depth), from the learner's verse statuses. */
+export function nodeApproved(
+  node: WithId<NodeDoc>,
+  nodes: WithId<NodeDoc>[],
+  verses: WithId<Verse>[],
+  statuses: Map<string, string>,
+): number {
+  const parent = new Map(nodes.map((n) => [n.id, n.parentId ?? null]));
+  const within = (nid: string | null | undefined): boolean => {
+    const seen = new Set<string>();
+    while (nid && !seen.has(nid)) {
+      if (nid === node.id) return true;
+      seen.add(nid);
+      nid = parent.get(nid) ?? null;
+    }
+    return false;
+  };
+  return verses.filter((v) => statuses.get(v.id) === 'APPROVED' && within(v.nodeId)).length;
+}
+
+export function nodePct(node: WithId<NodeDoc>, nodes: WithId<NodeDoc>[], verses: WithId<Verse>[], statuses: Map<string, string>): number {
+  return pct(nodeApproved(node, nodes, verses, statuses), node.verseCount ?? 0);
 }
 
 function dayKey(d: Date): string {

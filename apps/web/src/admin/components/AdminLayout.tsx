@@ -1,12 +1,8 @@
 import { useState, type ReactNode } from 'react';
 import { Link, NavLink, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { doc } from 'firebase/firestore';
 import { AnimatePresence, motion } from 'framer-motion';
-import { db } from '@/lib/firebase';
-import { api, errorMessage } from '@/lib/api';
 import { isAdminRole, useAuth } from '@/stores/auth';
-import { toast, useUi } from '@/stores/ui';
-import { useDoc } from '@/hooks/useFirestore';
+import { useUi } from '@/stores/ui';
 import { usePendingCounts } from '../hooks';
 import { Button, Icon, IconButton, Spinner, cn, type IconName } from '@/components/ui';
 import { Logo } from '@/components/layout/Logo';
@@ -38,35 +34,6 @@ export function RequireAdmin({ children }: { children: ReactNode }) {
 }
 
 
-function DriveBanner() {
-  const uid = useAuth((s) => s.user?.uid);
-  const settings = useDoc<{ driveStatus?: string }>(uid ? doc(db, 'adminSettings', uid) : null);
-  const [busy, setBusy] = useState(false);
-  if (settings.data?.driveStatus !== 'needs_reconnect') return null;
-  return (
-    <div role="alert" className="flex flex-wrap items-center justify-center gap-3 bg-danger/15 px-4 py-2 text-sm">
-      <Icon name="alert" size={16} className="text-danger" />
-      Google Drive access has expired. Uploads and learner playback for your playlists are paused.
-      <Button
-        size="sm"
-        variant="outline"
-        loading={busy}
-        onClick={async () => {
-          setBusy(true);
-          try {
-            const res = await api.driveAuthUrl({});
-            if (res.url) window.location.href = res.url;
-          } catch (err) {
-            toast.error(errorMessage(err));
-            setBusy(false);
-          }
-        }}
-      >
-        Reconnect Drive
-      </Button>
-    </div>
-  );
-}
 
 const NAV: { to: string; label: string; icon: IconName; badge?: 'reviews' | 'payments' }[] = [
   { to: '/admin', label: 'Dashboard', icon: 'chart' },
@@ -146,7 +113,6 @@ export function AdminLayout({ children }: { children: ReactNode }) {
           <IconButton icon="menu" label="Open menu" onClick={() => setOpen(true)} />
           <Logo size={28} />
         </header>
-        <DriveBanner />
         <main id="main" className="mx-auto max-w-7xl px-4 pb-28 pt-5 sm:px-6 lg:px-10 lg:py-6">{children}</main>
       </div>
 

@@ -1,14 +1,15 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { api, errorMessage } from '@/lib/api';
+import { errorMessage } from '@/lib/errors';
+import { acceptAdminInvite } from '@/lib/ops/admins';
 import { isAdminRole, useAuth } from '@/stores/auth';
 import { toast } from '@/stores/ui';
-import { Button, Card, Icon } from '@/components/ui';
+import { Button, Card } from '@/components/ui';
 import { Logo } from '@/components/layout/Logo';
 
 export default function AcceptInvitePage() {
   const { token } = useParams<{ token: string }>();
-  const { user, role, refreshClaims } = useAuth();
+  const { user, role } = useAuth();
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -19,8 +20,7 @@ export default function AcceptInvitePage() {
     setBusy(true);
     setError('');
     try {
-      await api.acceptAdminInvite({ token });
-      await refreshClaims();
+      await acceptAdminInvite(token);
       toast.success('Welcome to the teacher portal!');
       navigate('/admin', { replace: true });
     } catch (err) {
@@ -51,7 +51,6 @@ export default function AcceptInvitePage() {
         ) : (
           <>
             <p className="mt-3 text-sm text-muted">Signed in as <strong>{user.email}</strong>. Accept to become a teacher (admin).</p>
-            <p className="mt-2 flex items-center justify-center gap-1 text-xs text-muted"><Icon name="shield" size={14} /> Learners never see who their teachers are.</p>
             {error && <p role="alert" className="mt-4 text-sm text-danger">{error}</p>}
             <Button className="mt-6" size="lg" loading={busy} onClick={() => void accept()}>Accept invitation</Button>
           </>

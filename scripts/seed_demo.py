@@ -6,19 +6,18 @@ Usage (emulators running, Super Admin bootstrapped):
   python scripts/seed_demo.py --emulators
 Options:
   --owner-email  admin who owns the demo playlists (default: first Super Admin)
-  --no-media     skip generating sample audio (always skipped unless MOCK_DRIVE)
+  --no-media     skip generating sample audio
 """
 
 from __future__ import annotations
 
 import io
 import math
-import os
 import struct
 import sys
 import wave
 
-from _common import get_or_create_user, make_deps, parse_args
+from _common import get_or_create_user, init, now, parse_args
 
 LEARNER_EMAIL = "learner@demo.test"
 LEARNER_PASSWORD = "learner123"
@@ -60,16 +59,42 @@ def tone_wav(seconds: float = 4.0, base: float = 136.1, rate: int = 22050) -> by
     return buf.getvalue()
 
 
-def upload_sample(deps, owner, pid: str, vid: str, seconds: float) -> None:
-    from lc import uploads
+CHUNK = 700_000
 
+
+def store_audio(db, owner_uid: str, pid: str, vid: str, seconds: float) -> None:
+    """Write a WAV into media/{id}/chunks (the app's built-in Firestore storage)."""
     data = tone_wav(seconds)
-    res = uploads.create_upload_session(
-        deps, owner, {"purpose": "verse_audio", "playlistId": pid, "verseId": vid, "mimeType": "audio/wav", "size": len(data)}
+    ref = db.collection("media").document()
+    chunks = [data[i : i + CHUNK] for i in range(0, len(data), CHUNK)]
+    ref.set(
+        {
+            "purpose": "verse_audio", "pid": pid, "vid": vid, "kind": "audio", "mimeType": "audio/wav",
+            "uploaderUid": owner_uid, "learnerUid": None, "fileName": None, "store": "firestore",
+            "size": len(data), "chunkCount": len(chunks), "status": "ready", "durationSec": seconds, "createdAt": now(),
+        }
     )
-    sid = res["uploadUrl"].rsplit("/", 1)[-1]
-    uploads.mock_upload(deps, sid, f"bytes 0-{len(data) - 1}/{len(data)}", data)
-    uploads.finalize_upload(deps, owner, {"mediaId": res["mediaId"], "durationSec": seconds})
+    for n, part in enumerate(chunks):
+        ref.collection("chunks").document(str(n)).set({"data": part})
+    db.collection("playlists").document(pid).collection("verses").document(vid).update(
+        {"audioMediaId": ref.id, "hasAudio": True, "audioMime": "audio/wav"}
+    )
+
+
+def recount(db, pid: str) -> None:
+    p = db.collection("playlists").document(pid)
+    nodes = {s.id: s.to_dict() for s in p.collection("nodes").stream()}
+    counts = {nid: 0 for nid in nodes}
+    verses = list(p.collection("verses").stream())
+    for v in verses:
+        nid, seen = v.to_dict().get("nodeId"), set()
+        while nid and nid in nodes and nid not in seen:
+            seen.add(nid)
+            counts[nid] += 1
+            nid = nodes[nid].get("parentId")
+    for nid, c in counts.items():
+        p.collection("nodes").document(nid).update({"verseCount": c})
+    p.update({"verseCount": len(verses)})
 
 
 def main() -> None:
@@ -77,15 +102,8 @@ def main() -> None:
         "Seed demo data",
         lambda p: (p.add_argument("--owner-email"), p.add_argument("--no-media", action="store_true")),
     )
-    mock = os.environ.get("MOCK_DRIVE", "true").lower() == "true"
-    deps = make_deps(mock_drive=mock)
-    db = deps.db
-
-    from firebase_admin import auth
+    db, auth = init()
     from google.cloud.firestore_v1.base_query import FieldFilter
-
-    from lc.core import Caller
-    from lc.triggers import recount
 
     if args.owner_email:
         owner_user = auth.get_user_by_email(args.owner_email)
@@ -94,8 +112,8 @@ def main() -> None:
         if not supers:
             sys.exit("No Super Admin found. Run scripts/bootstrap_super_admin.py first.")
         owner_user = auth.get_user(supers[0].id)
-    owner = Caller(owner_user.uid, "SUPER_ADMIN", owner_user.email)
-    now = deps.now()
+    owner_uid = owner_user.uid
+    ts = now()
 
     # --- Sri Rudram -----------------------------------------------------------
     pid = "sri-rudram"
@@ -113,11 +131,11 @@ def main() -> None:
             "sequentialUnlock": False,
             "order": 1,
             "verseCount": 0,
-            "createdAt": now,
-            "updatedAt": now,
+            "createdAt": ts,
+            "updatedAt": ts,
         }
     )
-    db.collection("adminPlaylists").document(pid).set({"ownerUid": owner.uid, "createdBy": owner.uid, "createdAt": now})
+    db.collection("adminPlaylists").document(pid).set({"ownerUid": owner_uid, "createdBy": owner_uid, "createdAt": ts})
     nodes = p.collection("nodes")
     nodes.document("namakam").set({"parentId": None, "name": "Namakam", "description": "नमकम् · Salutations", "order": 1})
     nodes.document("chamakam").set({"parentId": None, "name": "Chamakam", "description": "चमकम् · Prayers for blessings", "order": 2})
@@ -127,43 +145,40 @@ def main() -> None:
     verses = p.collection("verses")
     for n, (name, first_line, details) in enumerate(NAMAKAM_A1, start=1):
         verses.document(f"na1-v{n}").set(
-            {"nodeId": "namakam-a1", "name": name, "firstLine": first_line, "details": details, "order": n, "hasAudio": False, "hasVideo": False, "createdAt": now}
+            {"nodeId": "namakam-a1", "name": name, "firstLine": first_line, "details": details, "order": n, "hasAudio": False, "hasVideo": False, "createdAt": ts}
         )
     verses.document("na2-v1").set(
-        {"nodeId": "namakam-a2", "name": "Verse 1", "firstLine": "नमो हिरण्यबाहवे सेनान्ये", "details": "<p lang=\"sa\">नमो हिरण्यबाहवे सेनान्ये दिशां च पतये नमः ।</p><p>Salutations to the golden-armed leader of armies, lord of the quarters.</p>", "order": 1, "hasAudio": False, "hasVideo": False, "createdAt": now}
+        {"nodeId": "namakam-a2", "name": "Verse 1", "firstLine": "नमो हिरण्यबाहवे सेनान्ये", "details": "<p lang=\"sa\">नमो हिरण्यबाहवे सेनान्ये दिशां च पतये नमः ।</p><p>Salutations to the golden-armed leader of armies, lord of the quarters.</p>", "order": 1, "hasAudio": False, "hasVideo": False, "createdAt": ts}
     )
     p.collection("materials").document("about").set(
         {"title": "About Sri Rudram", "type": "text", "nodeId": None, "status": "ready", "order": 1,
-         "text": "Chant slowly with attention to svaras (udātta, anudātta, svarita). Listen three times, then chant three times.", "createdAt": now}
+         "text": "Chant slowly with attention to svaras (udātta, anudātta, svarita). Listen three times, then chant three times.", "createdAt": ts}
     )
-    recount(deps, pid)
+    recount(db, pid)
 
     # --- a paid demo playlist ------------------------------------------------------
     pid2 = "purusha-suktam"
     p2 = db.collection("playlists").document(pid2)
     p2.set(
         {"title": "Purusha Suktam", "titleNative": "पुरुष सूक्तम्", "description": "The hymn of the cosmic being from the Rig Veda (10.90).",
-         "coverUrl": None, "access": "paid", "price": 199, "published": True, "sequentialUnlock": True, "order": 2, "verseCount": 0, "createdAt": now, "updatedAt": now}
+         "coverUrl": None, "access": "paid", "price": 199, "published": True, "sequentialUnlock": True, "order": 2, "verseCount": 0, "createdAt": ts, "updatedAt": ts}
     )
     p2.collection("payment").document("info").set({"upiId": "learnchants.trust@upi", "payeeName": "Learn Chants Trust"})
-    db.collection("adminPlaylists").document(pid2).set({"ownerUid": owner.uid, "createdBy": owner.uid, "createdAt": now})
+    db.collection("adminPlaylists").document(pid2).set({"ownerUid": owner_uid, "createdBy": owner_uid, "createdAt": ts})
     p2.collection("nodes").document("main").set({"parentId": None, "name": "Mantras", "description": "", "order": 1})
     p2.collection("verses").document("ps-v1").set(
-        {"nodeId": "main", "name": "Mantra 1", "firstLine": "सहस्रशीर्षा पुरुषः", "details": "<p lang=\"sa\">सहस्रशीर्षा पुरुषः सहस्राक्षः सहस्रपात् ।</p><p>The Purusha has a thousand heads, a thousand eyes, a thousand feet.</p>", "order": 1, "hasAudio": False, "hasVideo": False, "createdAt": now}
+        {"nodeId": "main", "name": "Mantra 1", "firstLine": "सहस्रशीर्षा पुरुषः", "details": "<p lang=\"sa\">सहस्रशीर्षा पुरुषः सहस्राक्षः सहस्रपात् ।</p><p>The Purusha has a thousand heads, a thousand eyes, a thousand feet.</p>", "order": 1, "hasAudio": False, "hasVideo": False, "createdAt": ts}
     )
-    recount(deps, pid2)
+    recount(db, pid2)
 
-    if mock and not args.no_media:
+    if not args.no_media:
         for n in range(1, len(NAMAKAM_A1) + 1):
-            upload_sample(deps, owner, pid, f"na1-v{n}", 3.0 + n * 0.5)
-        upload_sample(deps, owner, pid2, "ps-v1", 4.0)
-        print(f"✔ sample audio written under {deps.config.mock_drive_root}")
+            store_audio(db, owner_uid, pid, f"na1-v{n}", 3.0 + n * 0.5)
+        store_audio(db, owner_uid, pid2, "ps-v1", 4.0)
+        print("✔ sample audio stored in Firestore media chunks")
 
-    learner = get_or_create_user(deps, LEARNER_EMAIL, LEARNER_PASSWORD, "Demo Learner")
-    claims = learner.custom_claims or {}
-    if not claims.get("role"):
-        auth.set_custom_user_claims(learner.uid, {"role": "USER"})
-    db.collection("users").document(learner.uid).set({"displayName": "Demo Learner", "email": LEARNER_EMAIL, "createdAt": now}, merge=True)
+    learner = get_or_create_user(auth, LEARNER_EMAIL, LEARNER_PASSWORD, "Demo Learner")
+    db.collection("users").document(learner.uid).set({"displayName": "Demo Learner", "email": LEARNER_EMAIL, "createdAt": ts}, merge=True)
 
     print("✔ Seeded Sri Rudram (Namakam 11 + Chamakam 11 anuvakams) and Purusha Suktam (paid ₹199)")
     print(f"✔ Demo learner: {LEARNER_EMAIL} / {LEARNER_PASSWORD}")

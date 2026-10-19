@@ -2,8 +2,11 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { collection, doc, serverTimestamp, updateDoc, writeBatch } from 'firebase/firestore';
 import { AnimatePresence, motion } from 'framer-motion';
-import { db } from '@/lib/firebase';
-import { errorMessage } from '@/lib/api';
+import { auth, db } from '@/lib/firebase';
+import { deleteVerseMedia } from '@/lib/media';
+import { renameEntityFolders } from '@/lib/media/drive';
+import { recountVerses } from '@/lib/ops/content';
+import { errorMessage } from '@/lib/errors';
 import { buildTree, byOrder, descendants, reorder, type TreeNode } from '@/lib/tree';
 import type { NodeDoc, Verse, WithId } from '@/lib/types';
 import { toast } from '@/stores/ui';
@@ -40,6 +43,9 @@ function InlineName({ pid, node }: { pid: string; node: WithId<NodeDoc> }) {
     const name = value.trim();
     if (!name || name === node.name) return setValue(node.name);
     await updateDoc(doc(db, 'playlists', pid, 'nodes', node.id), { name, updatedAt: serverTimestamp() }).catch((e) => toast.error(errorMessage(e)));
+    // Keep the mirrored Drive folder name in sync (when Drive is connected).
+    const uid = auth.currentUser?.uid;
+    if (uid) await renameEntityFolders(uid, `n:${node.id}`, name).catch(() => undefined);
   };
   if (editing) {
     return (
@@ -304,10 +310,12 @@ export function StructureTab({ pid }: { pid: string }) {
         onConfirm={async () => {
           if (!deleting) return;
           const ids = descendants(nodes.data, deleting.id);
+          for (const v of verses.data.filter((v) => ids.has(v.nodeId))) await deleteVerseMedia(pid, v.id).catch(() => undefined);
           const batch = writeBatch(db);
           verses.data.filter((v) => ids.has(v.nodeId)).forEach((v) => batch.delete(doc(db, 'playlists', pid, 'verses', v.id)));
           ids.forEach((id) => batch.delete(doc(db, 'playlists', pid, 'nodes', id)));
           await batch.commit().catch((e) => toast.error(errorMessage(e)));
+          await recountVerses(pid).catch(() => undefined);
         }}
       />
     </div>
@@ -332,6 +340,7 @@ function MoveDialog({ pid, node, nodes, onClose }: { pid: string; node: WithId<N
               const parentId = target || null;
               const order = nodes.filter((n) => (n.parentId ?? null) === parentId).reduce((m, n) => Math.max(m, n.order ?? 0), 0) + 1;
               await updateDoc(doc(db, 'playlists', pid, 'nodes', node.id), { parentId, order }).catch((e) => toast.error(errorMessage(e)));
+              await recountVerses(pid).catch(() => undefined);
               onClose();
             }}
           >

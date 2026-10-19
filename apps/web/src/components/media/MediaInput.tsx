@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import type { MediaKind } from '@/lib/recorder';
 import { formatBytes, formatDuration } from '@/lib/format';
-import { readDuration } from '@/lib/media';
+import { readDuration } from '@/lib/duration';
 import { Button, Icon, Tabs } from '@/components/ui';
 import { Recorder, type Recording } from './Recorder';
 

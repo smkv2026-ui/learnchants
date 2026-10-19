@@ -1,101 +1,208 @@
 rules_version = '2';
 
-// Learn Chants Firestore Security Rules
+// Learn Chants Firestore Security Rules (Firebase Spark plan: no Cloud Functions).
 //
-// Principles:
-//  * Roles come from the `role` custom claim (set only by Cloud Functions).
-//    Admin access additionally requires an active `adminUsers/{uid}` record, so
-//    a deactivated admin loses access immediately even with an old ID token.
-//  * Learner-readable documents never contain admin identity or Drive ids.
-//    Admin-only collections (adminPlaylists, adminUsers, adminSettings,
-//    auditLogs) and functions-only collections (driveFiles, driveFolders,
-//    driveConnections, adminInvites) are denied to learners.
-//  * Trusted state (grants, payments, submissions, replies, progress) is
-//    written only by Cloud Functions (Admin SDK bypasses these rules).
+// These rules ARE the backend: every trusted write (roles, payments, grants,
+// reviews, progress) is validated here.
+//  * Admins are users with an active `adminUsers/{uid}` record. The first Super
+//    Admin is the owner email below (set by scripts/deploy.sh) on a verified
+//    sign-in; further admins join through single-use invites.
+//  * Media bytes live in `media/{id}/chunks/*` (or in Google Drive when a teacher
+//    connects it). Reading media requires access to its playlist (paid playlists
+//    need an access grant) or ownership of a learner recording.
+//  * Teacher anonymity is NOT a goal in this edition (owner decision for the
+//    Spark plan), but learners still cannot read admin records or other
+//    learners' data.
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // Replaced by scripts/deploy.sh with the owner's email.
+    function ownerEmail() {
+      return 'owner@example.invalid';
+    }
 
     // ---------------------------------------------------------------- helpers
     function signedIn() {
       return request.auth != null;
     }
-    function claimRole() {
-      return signedIn() ? request.auth.token.get('role', 'USER') : 'ANON';
+    function uid() {
+      return request.auth.uid;
     }
-    function adminDoc() {
-      return /databases/$(database)/documents/adminUsers/$(request.auth.uid);
+    function mediaDoc(id) {
+      return /databases/$(database)/documents/media/$(id);
+    }
+    function inviteDoc(id) {
+      return /databases/$(database)/documents/adminInvites/$(id);
+    }
+    function paymentRefDoc(ref) {
+      return /databases/$(database)/documents/paymentRefs/$(ref);
+    }
+    function paymentRequestDoc(id) {
+      return /databases/$(database)/documents/paymentRequests/$(id);
+    }
+    function submissionDoc(id) {
+      return /databases/$(database)/documents/submissions/$(id);
+    }
+    function adminDoc(u) {
+      return /databases/$(database)/documents/adminUsers/$(u);
     }
     function isAdmin() {
-      return claimRole() in ['ADMIN', 'SUPER_ADMIN']
-        && exists(adminDoc())
-        && get(adminDoc()).data.status == 'active';
+      return signedIn() && exists(adminDoc(uid())) && get(adminDoc(uid())).data.status == 'active';
     }
     function isSuperAdmin() {
-      return claimRole() == 'SUPER_ADMIN' && isAdmin();
+      return isAdmin() && get(adminDoc(uid())).data.role == 'SUPER_ADMIN';
     }
-    function isSelf(uid) {
-      return signedIn() && request.auth.uid == uid;
+    function isSelf(u) {
+      return signedIn() && uid() == u;
     }
-    function playlistDoc(pid) {
+    function playlistPath(pid) {
       return /databases/$(database)/documents/playlists/$(pid);
     }
+    function playlist(pid) {
+      return get(playlistPath(pid)).data;
+    }
     function isPublished(pid) {
-      return exists(playlistDoc(pid)) && get(playlistDoc(pid)).data.published == true;
+      return exists(playlistPath(pid)) && playlist(pid).published == true;
+    }
+    function hasGrant(pid) {
+      return signedIn() && exists(/databases/$(database)/documents/accessGrants/$(uid() + '_' + pid));
+    }
+    // May play this playlist's media (paid playlists need a grant).
+    function hasContentAccess(pid) {
+      return isAdmin() || (isPublished(pid) && (playlist(pid).access == 'free' || hasGrant(pid)));
     }
     function canReadContent(pid) {
       return isAdmin() || isPublished(pid);
     }
-    // Fields that would leak admin identity or storage internals must never be
-    // written into learner-readable content documents.
-    function noIdentityFields() {
-      return !request.resource.data.keys().hasAny([
-        'ownerUid', 'createdBy', 'authorUid', 'adminUid', 'reviewedBy',
-        'driveFileId', 'folderId', 'driveFolderId', 'storageFolderId', 'email'
-      ]);
+    function data() {
+      return request.resource.data;
     }
     function onlyKeys(keys) {
-      return request.resource.data.keys().hasOnly(keys);
+      return data().keys().hasOnly(keys);
     }
     function changedOnly(keys) {
-      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
+      return data().diff(resource.data).affectedKeys().hasOnly(keys);
+    }
+    function isNow(t) {
+      return t == request.time;
     }
 
-    // ------------------------------------------------------------------ users
-    match /users/{uid} {
-      allow read: if isSelf(uid) || isAdmin();
-      allow create: if isSelf(uid)
+    // -------------------------------------------------------------- admins
+    match /adminUsers/{u} {
+      allow read: if isSelf(u) || isAdmin();
+      // 1) Owner bootstrap: verified sign-in with the owner email.
+      // 2) Invite acceptance: consume a valid invite in the same batch.
+      allow create: if isSelf(u)
+        && onlyKeys(['email', 'displayName', 'role', 'status', 'createdAt', 'inviteId'])
+        && data().status == 'active'
+        && data().email == request.auth.token.email
+        && (
+          (data().role == 'SUPER_ADMIN'
+            && request.auth.token.email == ownerEmail()
+            && request.auth.token.email_verified == true)
+          ||
+          (data().role == 'ADMIN'
+            && validInvite(data().inviteId)
+            && !existsAfter(inviteDoc(data().inviteId)))
+        );
+      // Admins (de)activate others; only a Super Admin may change a Super Admin.
+      allow update: if isAdmin() && !isSelf(u)
+        && changedOnly(['status', 'updatedAt'])
+        && data().status in ['active', 'deactivated']
+        && (resource.data.role != 'SUPER_ADMIN' || isSuperAdmin());
+      allow delete: if isSuperAdmin() && !isSelf(u) && resource.data.role != 'SUPER_ADMIN';
+    }
+
+    function validInvite(inviteId) {
+      return inviteId is string
+        && exists(inviteDoc(inviteId))
+        && get(inviteDoc(inviteId)).data.expiresAt > request.time
+        && (get(inviteDoc(inviteId)).data.email == null
+            || get(inviteDoc(inviteId)).data.email == request.auth.token.email.lower());
+    }
+
+    // The invite id is the secret token, so invites are never readable by clients.
+    match /adminInvites/{inviteId} {
+      allow read: if false;
+      allow create: if isAdmin() && inviteId.size() >= 32
+        && onlyKeys(['email', 'createdBy', 'createdAt', 'expiresAt'])
+        && data().createdBy == uid()
+        && isNow(data().createdAt)
+        && data().expiresAt <= request.time + duration.value(7, 'd');
+      // Deleted by the accepting user in the same batch that creates their admin record.
+      allow delete: if isAdmin()
+        || (signedIn() && existsAfter(adminDoc(uid())) && getAfter(adminDoc(uid())).data.inviteId == inviteId);
+    }
+
+    match /adminSettings/{u} {
+      allow read, write: if isSelf(u) && isAdmin();
+    }
+
+    match /adminPlaylists/{pid} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() && data().ownerUid == uid();
+      // Storage overrides point into the owner's Drive, so only the owner (or a Super Admin) edits them.
+      allow update: if isAdmin() && data().ownerUid == resource.data.ownerUid
+        && (resource.data.ownerUid == uid() || isSuperAdmin());
+      allow delete: if isAdmin() && (resource.data.ownerUid == uid() || isSuperAdmin());
+    }
+
+    // Drive folder-id cache (Drive mode only).
+    match /driveFolders/{id} {
+      allow read, write: if isAdmin();
+    }
+
+    match /auditLogs/{id} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() && data().actorUid == uid() && isNow(data().createdAt);
+      allow update, delete: if false;
+    }
+
+    // ---------------------------------------------------------------- users
+    match /users/{u} {
+      allow read: if isSelf(u) || isAdmin();
+      allow create: if isSelf(u)
         && onlyKeys(['displayName', 'email', 'createdAt', 'prefs'])
-        && request.resource.data.displayName is string
-        && request.resource.data.displayName.size() <= 80;
-      allow update: if isSelf(uid)
-        && changedOnly(['displayName', 'prefs'])
-        && request.resource.data.displayName is string
-        && request.resource.data.displayName.size() <= 80;
+        && data().displayName is string && data().displayName.size() <= 80;
+      allow update: if isSelf(u) && changedOnly(['displayName', 'prefs'])
+        && data().displayName is string && data().displayName.size() <= 80;
       allow delete: if false;
 
+      // Learner progress: learners may create/touch their own doc, but only
+      // admins change the approved count.
       match /progress/{pid} {
-        allow read: if isSelf(uid) || isAdmin();
-        allow write: if false;
+        allow read: if isSelf(u) || isAdmin();
+        allow create: if (isSelf(u) && data().uid == u && data().pid == pid && data().approvedCount == 0) || isAdmin();
+        allow update: if (isSelf(u) && changedOnly(['updatedAt', 'lastVerseId', 'title'])) || isAdmin();
+        allow delete: if false;
 
         match /verseStatus/{vid} {
-          allow read: if isSelf(uid) || isAdmin();
-          allow write: if false;
+          allow read: if isSelf(u) || isAdmin();
+          // A learner can only mark a verse as SUBMITTED, never approve it.
+          allow create, update: if isAdmin()
+            || (isSelf(u)
+                && data().status == 'SUBMITTED'
+                && (resource == null || resource.data.status != 'APPROVED')
+                && onlyKeys(['status', 'pid', 'nodeId', 'lastSubmissionId', 'updatedAt']));
+          allow delete: if isAdmin();
         }
       }
 
       match /notifications/{nid} {
-        allow read, delete: if isSelf(uid);
-        allow update: if isSelf(uid) && changedOnly(['read']) && request.resource.data.read is bool;
-        allow create: if false;
+        allow read, delete: if isSelf(u);
+        allow update: if isSelf(u) && changedOnly(['read']) && data().read is bool;
+        allow create: if isAdmin()
+          && onlyKeys(['type', 'message', 'link', 'read', 'createdAt'])
+          && data().read == false;
       }
 
-      match /meta/{doc} {
-        allow read: if isSelf(uid) || isAdmin();
-        allow write: if false;
+      match /meta/{docId} {
+        allow read: if isSelf(u) || isAdmin();
+        allow create, update: if isSelf(u) && docId == 'stats' && onlyKeys(['activityDays', 'lastActiveAt'])
+          && data().activityDays is list && data().activityDays.size() <= 400;
       }
     }
 
-    // Admin dashboards query progress across learners.
     match /{path=**}/progress/{pid} {
       allow read: if isAdmin();
     }
@@ -103,134 +210,158 @@ service cloud.firestore {
       allow read: if isAdmin();
     }
 
-    // -------------------------------------------------------- public content
+    // -------------------------------------------------------------- content
     match /playlists/{pid} {
-      allow get: if isAdmin() || resource.data.published == true;
-      // Learner list queries must filter on published == true.
-      allow list: if isAdmin() || resource.data.published == true;
-      allow create: if isAdmin() && noIdentityFields()
-        && onlyKeys(['title', 'titleNative', 'description', 'coverUrl', 'access', 'price',
-                     'published', 'sequentialUnlock', 'order', 'verseCount', 'createdAt', 'updatedAt'])
-        && request.resource.data.title is string
-        && request.resource.data.access in ['free', 'paid'];
-      allow update: if isAdmin() && noIdentityFields()
-        && onlyKeys(['title', 'titleNative', 'description', 'coverUrl', 'access', 'price',
-                     'published', 'sequentialUnlock', 'order', 'verseCount', 'createdAt', 'updatedAt'])
-        && request.resource.data.access in ['free', 'paid'];
+      allow get, list: if isAdmin() || resource.data.published == true;
+      allow create, update: if isAdmin()
+        && data().title is string && data().title.size() <= 120
+        && data().access in ['free', 'paid']
+        && (data().access == 'free' || (data().price is number && data().price >= 1))
+        // inline cover images are kept small (Spark has no Cloud Storage)
+        && (!('coverUrl' in data()) || data().coverUrl == null || data().coverUrl.size() <= 400000);
       allow delete: if isAdmin();
 
-      // UPI details are needed by payers; the payee name is inherently visible
-      // (admins are advised to use a neutral organisation/trust UPI ID).
-      match /payment/{doc} {
+      match /payment/{docId} {
         allow read: if signedIn() && canReadContent(pid);
-        allow create, update: if isAdmin() && doc == 'info' && onlyKeys(['upiId', 'payeeName']);
+        allow create, update: if isAdmin() && docId == 'info' && onlyKeys(['upiId', 'payeeName']);
         allow delete: if isAdmin();
       }
-
       match /nodes/{nid} {
         allow read: if canReadContent(pid);
-        allow create, update: if isAdmin() && noIdentityFields()
-          && onlyKeys(['parentId', 'name', 'description', 'order', 'verseCount', 'createdAt', 'updatedAt'])
-          && request.resource.data.name is string;
-        allow delete: if isAdmin();
+        allow write: if isAdmin();
       }
-
       match /verses/{vid} {
         allow read: if canReadContent(pid);
-        allow create, update: if isAdmin() && noIdentityFields()
-          && request.resource.data.name is string
-          // media pointers are maintained by finalize_upload only
-          && (request.method == 'create'
-                ? !request.resource.data.keys().hasAny(['audioMediaId', 'videoMediaId'])
-                : !request.resource.data.diff(resource.data).affectedKeys()
-                    .hasAny(['audioMediaId', 'videoMediaId', 'hasAudio', 'hasVideo']));
-        allow delete: if isAdmin();
-
-        match /media/{mid} {
-          allow read: if canReadContent(pid);
-          allow write: if false;
-        }
+        allow write: if isAdmin();
       }
-
       match /materials/{mid} {
         allow read: if canReadContent(pid);
-        allow create, update: if isAdmin() && noIdentityFields()
-          && request.resource.data.title is string
-          && request.resource.data.type in ['pdf', 'scripture', 'text']
-          && (request.method == 'create'
-                ? !request.resource.data.keys().hasAny(['mediaId'])
-                : !request.resource.data.diff(resource.data).affectedKeys().hasAny(['mediaId']));
+        allow write: if isAdmin();
+      }
+    }
+
+    // ---------------------------------------------------------------- media
+    // Registry for every stored file. Bytes live in chunks (Firestore store) or in
+    // Google Drive (driveFileId, link-shared, only revealed to readers of this doc).
+    function mediaReadable(m) {
+      return isAdmin()
+        || (signedIn() && m.get('learnerUid', null) == uid())
+        || (m.purpose in ['verse_audio', 'verse_video', 'material'] && hasContentAccess(m.pid));
+    }
+    // ~8.4 MB per file in the Firestore store: 12 chunks of <= 700 KB.
+    function validLearnerMedia() {
+      return data().purpose in ['submission', 'payment_screenshot']
+        && data().learnerUid == uid()
+        && data().uploaderUid == uid()
+        && data().store == 'firestore'
+        && data().status == 'uploading'
+        && data().chunkCount is int && data().chunkCount >= 1 && data().chunkCount <= 12
+        && data().size is int && data().size <= 12 * 700000
+        && (data().purpose == 'payment_screenshot'
+              ? data().mimeType.matches('image/.*')
+              : data().mimeType.matches('(audio|video)/.*') && hasContentAccess(data().pid));
+    }
+
+    match /media/{mid} {
+      allow read: if mediaReadable(resource.data);
+      allow create: if (isAdmin() && data().uploaderUid == uid()) || (signedIn() && validLearnerMedia());
+      // Uploader finalises; admins may also move a file to Drive (archive).
+      allow update: if isAdmin()
+        || (signedIn() && resource.data.uploaderUid == uid() && resource.data.status == 'uploading'
+            && changedOnly(['status', 'durationSec']) && data().status == 'ready');
+      allow delete: if isAdmin();
+
+      match /chunks/{n} {
+        allow read: if mediaReadable(get(mediaDoc(mid)).data);
+        allow create: if signedIn()
+          && get(mediaDoc(mid)).data.uploaderUid == uid()
+          && get(mediaDoc(mid)).data.status == 'uploading'
+          && int(n) >= 0 && int(n) < get(mediaDoc(mid)).data.chunkCount
+          && onlyKeys(['data'])
+          && data().data is bytes && data().data.size() <= 700000;
+        allow update: if false;
         allow delete: if isAdmin();
       }
     }
 
-    // ------------------------------------------------------------ admin-only
-    match /adminPlaylists/{pid} {
-      allow read: if isAdmin();
-      allow create: if isAdmin()
-        && request.resource.data.ownerUid == request.auth.uid
-        && request.resource.data.createdBy == request.auth.uid
-        && onlyKeys(['ownerUid', 'createdBy', 'createdAt']);
-      allow update: if false; // storage overrides are set by set_storage_location
-      allow delete: if isAdmin() && (resource.data.ownerUid == request.auth.uid || isSuperAdmin());
+    // ------------------------------------------------------------- payments
+    match /accessGrants/{gid} {
+      allow read: if isAdmin() || (signedIn() && resource.data.uid == uid());
+      allow create: if isAdmin() && gid == data().uid + '_' + data().pid;
+      allow update: if false;
+      allow delete: if isAdmin();
     }
 
-    match /adminUsers/{uid} {
-      allow read: if isAdmin();
-      allow write: if false;
+    // One request per learner and playlist: {uid}_{pid}. Resubmission is allowed
+    // after a rejection. References are unique through paymentRefs/{reference}.
+    function validPaymentRequest(rid) {
+      return data().uid == uid()
+        && rid == uid() + '_' + data().pid
+        && onlyKeys(['uid', 'userName', 'pid', 'playlistTitle', 'amount', 'reference', 'screenshotMediaId',
+                     'status', 'reason', 'duplicateFlag', 'createdAt', 'updatedAt', 'previousReferences'])
+        && data().status == 'PENDING'
+        && data().reason == null
+        && data().reference is string && data().reference.matches('^[A-Z0-9-]{6,40}$')
+        && isPublished(data().pid)
+        && playlist(data().pid).access == 'paid'
+        && data().amount == playlist(data().pid).price
+        && !hasGrant(data().pid)
+        // the reference must be claimed for this request in the same batch
+        && existsAfter(paymentRefDoc(data().reference))
+        && getAfter(paymentRefDoc(data().reference)).data.requestId == rid
+        && data().duplicateFlag == exists(paymentRefDoc(data().reference))
+        && (data().screenshotMediaId == null
+            || (get(mediaDoc(data().screenshotMediaId)).data.learnerUid == uid()
+                && get(mediaDoc(data().screenshotMediaId)).data.purpose == 'payment_screenshot'));
     }
 
-    match /adminSettings/{uid} {
-      allow read: if isSelf(uid) && isAdmin();
-      allow create: if isSelf(uid) && isAdmin()
-        && onlyKeys(['displayName', 'upiId', 'payeeName', 'theme']);
-      allow update: if isSelf(uid) && isAdmin()
-        && changedOnly(['displayName', 'upiId', 'payeeName', 'theme']);
+    match /paymentRequests/{rid} {
+      allow read: if isAdmin() || (signedIn() && resource.data.uid == uid());
+      allow create: if signedIn() && validPaymentRequest(rid);
+      allow update: if (signedIn() && resource.data.uid == uid() && resource.data.status == 'REJECTED' && validPaymentRequest(rid))
+        || (isAdmin()
+            && changedOnly(['status', 'reason', 'reviewedAt', 'updatedAt'])
+            && resource.data.status == 'PENDING'
+            && data().status in ['APPROVED', 'REJECTED']
+            && (data().status == 'APPROVED' || (data().reason is string && data().reason.size() > 0)));
       allow delete: if false;
     }
 
-    match /auditLogs/{id} {
+    match /paymentRefs/{ref} {
       allow read: if isAdmin();
-      allow write: if false;
+      // Claimed by a learner's request; re-claimable only after a rejection.
+      allow create, update: if signedIn()
+        && onlyKeys(['requestId', 'uid', 'status'])
+        && data().uid == uid() && data().status == 'PENDING'
+        && getAfter(paymentRequestDoc(data().requestId)).data.reference == ref
+        && getAfter(paymentRequestDoc(data().requestId)).data.uid == uid()
+        && (resource == null || resource.data.status == 'REJECTED');
+      allow update: if isAdmin() && changedOnly(['status']);
     }
 
-    // -------------------------------------------- functions-written, scoped
-    match /accessGrants/{gid} {
-      allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
-      allow write: if false;
-    }
-
-    match /paymentRequests/{id} {
-      allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
-      allow write: if false;
-    }
-
+    // ---------------------------------------------------------- submissions
     match /submissions/{sid} {
-      allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
-      allow write: if false;
+      allow read: if isAdmin() || (signedIn() && resource.data.uid == uid());
+      allow create: if signedIn()
+        && data().uid == uid()
+        && data().status == 'SUBMITTED'
+        && data().replyCount == 0
+        && hasContentAccess(data().pid)
+        && get(mediaDoc(data().mediaId)).data.learnerUid == uid()
+        && get(mediaDoc(data().mediaId)).data.purpose == 'submission'
+        && get(mediaDoc(data().mediaId)).data.status == 'ready';
+      allow update: if isAdmin()
+        && changedOnly(['status', 'replyCount', 'updatedAt', 'lastReplyAt'])
+        && data().status in ['SUBMITTED', 'NEEDS_WORK', 'APPROVED'];
+      allow delete: if false;
 
       match /replies/{rid} {
-        allow read: if isAdmin()
-          || (signedIn() && get(/databases/$(database)/documents/submissions/$(sid)).data.uid == request.auth.uid);
-        allow write: if false;
+        allow read: if isAdmin() || (signedIn() && get(submissionDoc(sid)).data.uid == uid());
+        allow create: if isAdmin() && data().authorUid == uid() && data().status in ['APPROVED', 'NEEDS_WORK'];
+        allow update, delete: if false;
       }
     }
 
-    // --------------------------------------------------------- functions-only
-    match /driveFiles/{id} {
-      allow read, write: if false;
-    }
-    match /driveFolders/{id} {
-      allow read, write: if false;
-    }
-    match /driveConnections/{uid} {
-      allow read, write: if false;
-    }
-    match /adminInvites/{id} {
-      allow read, write: if false;
-    }
-
-    // Everything else is closed.
     match /{document=**} {
       allow read, write: if false;
     }

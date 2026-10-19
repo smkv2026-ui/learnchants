@@ -3,8 +3,8 @@ import { Link, useParams } from 'react-router-dom';
 import { collection, orderBy, query, where } from 'firebase/firestore';
 import { AnimatePresence, motion } from 'framer-motion';
 import { db } from '@/lib/firebase';
-import { errorMessage } from '@/lib/api';
-import { uploadMedia } from '@/lib/upload';
+import { errorMessage } from '@/lib/errors';
+import { submitRecording } from '@/lib/ops/learner';
 import { orderedVerses, unlockedVerses } from '@/lib/sequence';
 import { sanitizeHtml } from '@/lib/sanitize';
 import { pathTo } from '@/lib/tree';
@@ -101,11 +101,7 @@ export default function VersePage() {
     if (!pid || !vid) return;
     try {
       setProgress(0);
-      await uploadMedia(
-        rec.blob,
-        { purpose: 'submission', playlistId: pid, verseId: vid, kind, mimeType: rec.mimeType },
-        { onProgress: setProgress, durationSec: rec.durationSec },
-      );
+      await submitRecording(pid, playlist.data!, verse!, rec.blob, kind, { onProgress: setProgress, durationSec: rec.durationSec });
       toast.success('Sent to your teacher. You will be notified when they reply.');
       celebrate();
       setPracticeKey((k) => k + 1);

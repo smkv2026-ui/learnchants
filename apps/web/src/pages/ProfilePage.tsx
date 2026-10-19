@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { updateProfile } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
-import { errorMessage } from '@/lib/api';
+import { errorMessage } from '@/lib/errors';
 import { useAuth } from '@/stores/auth';
 import { toast, useUi } from '@/stores/ui';
 import { usePwa } from '@/stores/pwa';

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { collection, doc, orderBy, query, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { errorMessage } from '@/lib/api';
+import { errorMessage } from '@/lib/errors';
 import { reorder } from '@/lib/tree';
 import { formatInr } from '@/lib/upi';
 import type { Playlist } from '@/lib/types';

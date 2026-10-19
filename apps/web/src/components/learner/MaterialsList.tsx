@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { api, errorMessage } from '@/lib/api';
+import { errorMessage } from '@/lib/errors';
 import { formatBytes } from '@/lib/format';
+import { resolveMedia } from '@/lib/media';
 import type { Material, WithId } from '@/lib/types';
 import { toast } from '@/stores/ui';
 import { Badge, Icon, Modal } from '@/components/ui';
@@ -25,7 +26,7 @@ export function MaterialsList({ items, canOpen }: { items: WithId<Material>[]; c
     const win = window.open('', '_blank');
     if (win) win.opener = null;
     try {
-      const { url } = await api.getMediaUrl({ mediaId: m.mediaId });
+      const { url } = await resolveMedia(m.mediaId);
       if (win) win.location.href = url;
       else window.location.href = url;
     } catch (err) {

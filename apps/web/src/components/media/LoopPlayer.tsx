@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useMediaUrl } from '@/hooks/useMediaUrl';
-import { errorDetails } from '@/lib/api';
+
 import { formatDuration } from '@/lib/format';
 import { initialLoop, LOOP_COUNT, loopReducer, shouldReplay, type LoopState } from '@/lib/loop';
 import { haptic } from '@/lib/celebrate';
@@ -39,7 +39,7 @@ export function LoopPlayer({ audioMediaId, videoMediaId, loops = LOOP_COUNT, aut
   const [needsTap, setNeedsTap] = useState(false);
   const autoStarted = useRef(false);
   const resumeAt = useRef<number | null>(null);
-  const locked = !!url.error && errorDetails(url.error)?.locked === true;
+  const locked = !!url.error && (url.error as { locked?: boolean }).locked === true;
 
   useEffect(() => {
     if (locked) onLocked?.();
@@ -59,7 +59,9 @@ export function LoopPlayer({ audioMediaId, videoMediaId, loops = LOOP_COUNT, aut
     if (!m) return;
     if (fromGesture) {
       await resumeAudio();
-      if (!analyser) setAnalyser(analyserForElement(m));
+      // Cross-origin (Drive) media would play silently through Web Audio without
+      // CORS, so the live waveform is only wired for local (blob) media.
+      if (!analyser && !url.data?.external) setAnalyser(analyserForElement(m));
     }
     m.playbackRate = speed;
     try {
@@ -69,7 +71,7 @@ export function LoopPlayer({ audioMediaId, videoMediaId, loops = LOOP_COUNT, aut
       setNeedsTap(true);
       dispatch({ type: 'pause' });
     }
-  }, [analyser, speed]);
+  }, [analyser, speed, url.data?.external]);
 
   // Auto-start the 3x loop when the verse opens.
   const onCanPlay = () => {

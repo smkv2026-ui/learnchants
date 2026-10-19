@@ -6,8 +6,9 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { db } from '@/lib/firebase';
-import { api, errorMessage } from '@/lib/api';
-import { uploadMedia } from '@/lib/upload';
+import { errorMessage } from '@/lib/errors';
+import { resizeImage } from '@/lib/image';
+import { submitPaymentRequest } from '@/lib/ops/payments';
 import { buildUpiLink, formatInr } from '@/lib/upi';
 import { timeAgo } from '@/lib/format';
 import { celebrate } from '@/lib/celebrate';
@@ -70,13 +71,12 @@ export default function PaymentPage() {
   const onSubmit = handleSubmit(async ({ reference }) => {
     if (!pid) return;
     try {
-      let screenshotMediaId: string | undefined;
+      let image: Blob | null = null;
       if (shot) {
         setProgress(0);
-        const res = await uploadMedia(shot, { purpose: 'payment_screenshot', playlistId: pid, fileName: shot.name }, { onProgress: setProgress });
-        screenshotMediaId = res.mediaId;
+        image = await resizeImage(shot, 1400, 0.75);
       }
-      const res = await api.submitPaymentRequest({ playlistId: pid, reference, screenshotMediaId });
+      const res = await submitPaymentRequest(pid, p, reference, image, setProgress);
       toast.success(res.duplicateFlag ? 'Submitted. This reference was used before, so the review may take a little longer.' : 'Payment submitted for review.');
       celebrate();
       reset();

@@ -94,8 +94,8 @@ export interface Progress {
   uid: string;
   title?: string;
   approvedCount: number;
-  totalCount: number;
-  nodeApproved?: Record<string, number>;
+  /** Legacy; totals come from the playlist's verseCount. */
+  totalCount?: number;
   updatedAt?: TS;
   lastVerseId?: string;
 }

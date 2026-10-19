@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { collection, doc, query, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { api, errorMessage } from '@/lib/api';
+import { errorMessage } from '@/lib/errors';
+import { revokeAccess } from '@/lib/ops/payments';
 import { timeAgo } from '@/lib/format';
 import type { Playlist, TS, WithId } from '@/lib/types';
 import { toast } from '@/stores/ui';
@@ -61,7 +62,7 @@ export function AccessTab({ pid, playlist }: { pid: string; playlist: WithId<Pla
                 if (!revoking) return;
                 setBusy(true);
                 try {
-                  await api.revokeAccess({ uid: revoking, playlistId: pid, reason: reason.trim() || undefined });
+                  await revokeAccess(revoking, pid, playlist.title, reason.trim() || undefined);
                   toast.success('Access revoked');
                   setRevoking(null);
                   setReason('');

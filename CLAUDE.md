@@ -3,117 +3,74 @@
 Guidance for Claude Code when working in this repository. Read `docs/BRD.md` for full requirements before making significant changes.
 
 ## Project Summary
-Learn Chants is a responsive, installable PWA for learning Vedic/devotional chants verse by verse. Admins (teachers) author playlists with audio/video/meaning; media is stored in the admin's Google Drive in a folder tree mirroring the playlist hierarchy. Learners loop-listen (3x), record their own chanting (3x), send feedback, receive corrections, and see progress. Some playlists are paid via UPI with manual admin approval.
+Learn Chants is a responsive, installable PWA for learning Vedic/devotional chants verse by verse. Admins (teachers) author playlists with audio/video/meaning; media is stored in Firestore (built-in, chunked) or optionally in the teacher's Google Drive in a folder tree mirroring the playlist hierarchy. Learners loop-listen (3x), record their own chanting (3x), send feedback, receive corrections, and see progress. Some playlists are paid via UPI with manual admin approval.
 
-## Architecture: Firebase only (NO Node.js/Express server)
-There is no self-hosted backend. Everything runs on Firebase, with Google Drive as the media store.
+## Architecture: Firebase Spark (free) plan only — no server code
+Owner decision (Oct 2026): run on the free Spark plan and **give up teacher anonymity**. There is no Node.js server and no Cloud Functions; the Python Functions edition lives in git history (commit `f6dd783`).
 
-- **Hosting**: Firebase Hosting serves the PWA over HTTPS at a live URL (`<project>.web.app`, custom domain optional).
-- **Auth**: Firebase Authentication (email/password + Google sign-in). Roles (`SUPER_ADMIN`, `ADMIN`, `USER`) are stored as **custom claims** (`role`) set only by Cloud Functions.
-- **Database**: Cloud Firestore, protected by Security Rules (the primary authorisation layer for direct client reads/writes).
-- **Server logic**: Cloud Functions for Firebase, 2nd gen, written in **Python 3.12** (`firebase-functions` Python SDK). Use functions only where secrets, Drive tokens, or trusted logic are needed (see list below).
-- **Media storage**: Google Drive (Drive API v3 via `google-api-python-client`). Firebase Storage is used ONLY for small public cover images.
-- **Secrets**: Google OAuth client secret, token-encryption key, and media-token signing key live in Secret Manager (`firebase functions:secrets:set`), never in the client or repo.
-- **Protection**: Firebase App Check (reCAPTCHA Enterprise/v3) on Firestore and Functions.
-- **Local dev**: Firebase Emulator Suite (Auth, Firestore, Functions, Hosting).
-- **Plan note**: Cloud Functions need the Firebase **Blaze** (pay-as-you-go) plan; usage for a small app is typically very low. Document this in the README.
+- **Hosting**: Firebase Hosting serves the PWA (`<project>.web.app`).
+- **Auth**: Firebase Authentication (email/password + Google). Roles come from `adminUsers/{uid}` records (`ADMIN`/`SUPER_ADMIN`, `status: active`), checked by the rules on every request. No custom claims.
+- **Database + backend**: Cloud Firestore. `firestore.rules` is the backend: it validates every trusted write (roles, invites, payments, grants, reviews, progress). Client operations live in `apps/web/src/lib/ops/*` (batches/transactions).
+- **Media storage**: built-in Firestore storage (`media/{id}` + `chunks/{n}`, ≤700 KB × 12 ≈ 8.4 MB per file). Optional Google Drive for teachers (browser session token via Google Identity Services, scope `drive.file`, files shared by link). No Cloud Storage (Spark can't create buckets).
+- **Owner bootstrap**: `scripts/deploy.sh` writes the owner email into `firestore.rules`; a verified sign-in with it may create its own SUPER_ADMIN record once.
+- **Local dev**: Emulator Suite (Auth, Firestore, Hosting).
 
 ## Frontend Stack
-React 18 + TypeScript + Vite (build tooling only), `vite-plugin-pwa` (Workbox), React Router, TanStack Query, Zustand, Tailwind CSS, Framer Motion, `react-hook-form` + `zod`, `wavesurfer.js`, `canvas-confetti`, `dnd-kit`, `qrcode.react`, Firebase JS SDK v10 (modular imports). Enable Firestore offline persistence.
+React 18 + TypeScript + Vite (build tooling only), `vite-plugin-pwa` (Workbox), React Router, TanStack Query, Zustand, Tailwind CSS, Framer Motion, `react-hook-form` + `zod`, `canvas-confetti`, `dnd-kit`, `qrcode.react`, Firebase JS SDK v10 (modular imports: app, auth, firestore, app-check). Live waveforms use the Web Audio AnalyserNode. Enable Firestore offline persistence.
 
 ## Repository Layout
 ```
-/apps/web            React PWA (Vite)
-/functions           Python Cloud Functions (pydantic models, pytest tests)
-/firestore.rules     Firestore Security Rules
+/apps/web            React PWA (Vite); lib/ops = client operations, lib/media = storage
+/firestore.rules     Firestore Security Rules (the backend)
 /firestore.indexes.json
-/storage.rules       Firebase Storage rules (cover images only)
-/firebase.json       Hosting, Functions, Emulators config
-/scripts             one-off Python scripts (bootstrap super admin, seed demo data)
+/firebase.json       Hosting, Firestore, Emulators config
+/scripts             deploy.sh, bootstrap_super_admin.py, seed_demo.py (firebase-admin)
 /docs                BRD.md, CLAUDE_CODE_PROMPT.md, architecture notes
 ```
 
 ## Commands
-- `pnpm install` (inside `apps/web`), `python -m venv functions/venv && pip install -r functions/requirements.txt`
-- `firebase emulators:start`: run Auth, Firestore, Functions, Hosting locally
-- `pnpm --filter web dev`: Vite dev server against emulators
-- `pnpm --filter web build` then `firebase deploy`: ship to the live URL
-- `pytest functions`: function tests; `pnpm --filter web test`: web unit tests
-- `pnpm --filter web test:rules`: Firestore rules tests (`@firebase/rules-unit-testing`, dev tooling)
-- `python scripts/bootstrap_super_admin.py`: creates the first Super Admin (reads email from env)
-- `python scripts/seed_demo.py`: seeds a demo Sri Rudram > Namakam (11 anuvakams) with sample verses
+- `pnpm install`; `python3 -m venv scripts/.venv && scripts/.venv/bin/pip install -r scripts/requirements.txt`
+- `pnpm emulators`: Auth, Firestore, Hosting locally; `pnpm dev:emu`: Vite dev server against emulators
+- `pnpm --filter web test`: web unit tests; `pnpm test:rules`: Firestore rules tests (emulator)
+- `pnpm --filter web typecheck` / `lint` / `build`
+- `scripts/.venv/bin/python scripts/bootstrap_super_admin.py --emulators`, `scripts/.venv/bin/python scripts/seed_demo.py --emulators`
+- `./scripts/deploy.sh <project-id> <owner-email>`: build + deploy Hosting and Firestore rules/indexes
 
-## Environment and Secrets
-- Web `.env` (public Firebase config only): `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_APP_ID`, `VITE_APPCHECK_SITE_KEY`, `VITE_USE_EMULATORS`.
-- Functions secrets (Secret Manager): `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `TOKEN_ENCRYPTION_KEY` (AES-256-GCM for Drive refresh tokens), `MEDIA_TOKEN_SECRET` (HMAC for short-lived media URLs).
-- Functions params: `APP_URL`, `MOCK_DRIVE` (true uses local-disk/emulator storage, no Google credentials needed).
-- Provide `.env.example` and document everything in `README.md`. Never commit secrets.
+## Environment
+- Web `.env` (public config only): `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_APP_ID`, `VITE_APPCHECK_SITE_KEY`, `VITE_USE_EMULATORS`, optional `VITE_GOOGLE_CLIENT_ID`, `VITE_GOOGLE_API_KEY`, `VITE_GOOGLE_APP_ID` (Drive/Picker). No secrets exist in this edition; never commit `.env*.local`.
 
 ## Firestore Data Model
-Public/learner-readable documents must never contain admin identity or Drive IDs.
-
-- `users/{uid}`: displayName, email, createdAt. (Role is in the custom claim, not trusted from this doc.)
-- `playlists/{pid}`: title, description, coverUrl, access (`free|paid`), price, published, order, verseCount.
-- `playlists/{pid}/payment/info`: upiId, payeeName (readable by signed-in users; see anonymity note below).
-- `playlists/{pid}/nodes/{nid}`: parentId, name, description, order.
-- `playlists/{pid}/verses/{vid}`: nodeId, name, details, order, hasAudio, hasVideo.
-- `playlists/{pid}/verses/{vid}/media/{mid}`: kind (`audio|video`), mimeType, durationSec. No Drive IDs.
-- `playlists/{pid}/materials/{mid}`: title, type (`pdf|scripture|text`), text?, mediaId?.
-- `adminPlaylists/{pid}`: ownerUid, storageFolderId override, createdBy (ADMIN-ONLY, rules deny learners).
-- `driveFiles/{mediaId}`: driveFileId, folderId, ownerUid (FUNCTIONS-ONLY, rules deny all clients).
-- `driveConnections/{adminUid}`: encrypted tokens, rootFolderId, status (FUNCTIONS-ONLY).
-- `adminSettings/{adminUid}`: defaultFolderId, displayName (admin reads own only).
-- `accessGrants/{uid_pid}`: uid, pid, grantedAt (functions write; user reads own).
-- `paymentRequests/{id}`: uid, pid, amount, reference, screenshotMediaId?, status (`PENDING|APPROVED|REJECTED`), reason. The reviewing admin is recorded only in `auditLogs`.
-- `submissions/{id}`: uid, pid, vid, kind, mediaId, status (`SUBMITTED|NEEDS_WORK|APPROVED`), createdAt.
-- `submissions/{id}/replies/{rid}`: text?, mediaId?, createdAt (no author field; author goes to `auditLogs`).
-- `users/{uid}/progress/{pid}`: approvedCount, totalCount; `users/{uid}/progress/{pid}/verses/{vid}`: status. (Functions write only.)
-- `users/{uid}/notifications/{nid}`: type, message, read, createdAt.
-- `adminInvites/{token}`, `auditLogs/{id}`: FUNCTIONS-ONLY writes; admin read for audit logs.
-
-## Cloud Functions (Python) to implement
-- Drive: `drive_auth_url`, `drive_oauth_callback` (HTTPS), `set_storage_location`, `ensure_folder_path` (idempotent, caches folder IDs).
-- Uploads: `create_upload_session` (callable; verifies role/access, resolves the target Drive folder, creates a Drive **resumable upload session** with the admin's token and returns only the session URI, so the browser uploads directly to Drive without passing file bytes through functions), `finalize_upload` (records metadata in Firestore + `driveFiles`).
-- Media: `get_media_url` (callable; checks access and returns a short-lived HMAC-signed URL), `stream_media` (HTTPS; validates the signed URL, streams from Drive with HTTP Range support).
-- Admins: `create_admin_invite`, `accept_admin_invite`, `deactivate_admin`, `remove_admin` (SUPER_ADMIN only); all set/clear custom claims.
-- Payments: `submit_payment_request` (duplicate reference check), `review_payment` (approve creates `accessGrants`, reject needs reason), `revoke_access`.
-- Review: `review_submission` (reply + status; on APPROVED updates progress rollups, creates notification, writes audit log).
-- Triggers: maintain `verseCount` and progress totals when verses/nodes change; clean up Drive files when content is deleted.
+- `users/{uid}`: displayName, email, createdAt (self write). Subcollections: `progress/{pid}` (approvedCount: admins only; learners create with 0 and touch lastVerseId/updatedAt), `progress/{pid}/verseStatus/{vid}` (learners may only set SUBMITTED), `notifications` (admins create; learner marks read), `meta/stats` (activityDays).
+- `adminUsers/{uid}`: email, displayName, role, status, inviteId. `adminInvites/{token}` (token = secret doc id, unreadable). `adminSettings/{uid}`, `adminPlaylists/{pid}` (ownerUid, Drive folder override), `driveFolders/*` (Drive folder cache), `auditLogs/*` (actorUid must be the writer).
+- `playlists/{pid}` (+ inline small `coverUrl`), `payment/info`, `nodes`, `verses` (audioMediaId/videoMediaId, hasAudio/hasVideo), `materials` (mediaId).
+- `media/{id}`: purpose, pid, vid, kind, mimeType, uploaderUid, learnerUid, store (`firestore|drive`), size, chunkCount, driveFileId?, status (`uploading|ready`); `media/{id}/chunks/{n}`: data (bytes).
+- `accessGrants/{uid_pid}` (admins), `paymentRequests/{uid_pid}` (learner; resubmit after REJECTED), `paymentRefs/{reference}` (uniqueness), `submissions/{id}` (+ `replies` with authorUid, authorLabel "Your Teacher").
 
 ## Critical Rules (non-negotiable)
 
-### 1. Admin anonymity
-- Admin identity (uid, name, email) is stored only in admin-only collections (`adminPlaylists`, `auditLogs`). Learner-readable documents never contain it.
-- Firestore rules must deny learners any read of admin-only collections. Replies are labelled "Your Teacher".
-- Add rules tests proving a learner token cannot read any admin identifier or Drive ID.
-- Caveat: a UPI ID/payee name is inherently visible to payers. Recommend admins use a neutral organisation/trust UPI ID and mention this in the admin UI near the UPI field.
+### 1. Rules are the backend
+- Every trusted state change must be validated in `firestore.rules`, with tests in `apps/web/tests/rules`. Never rely on client-side checks.
+- Privilege writes that could fail (owner bootstrap, invite acceptance) use transactions so rejected writes never appear locally.
+- Teacher anonymity is **not** a requirement in this edition, but learners must never read admin-only collections or other learners' data.
 
-### 2. Admin portal is hidden and server-enforced
-- Admin UI lives under `/admin/*`, lazy-loaded in a separate chunk, no links from user screens.
-- Authorisation is enforced by Firestore Security Rules and by the `role` claim checks inside every function, never by client-side hiding.
-- Only admins can invite admins (single-use, expiring token). Only SUPER_ADMIN can remove admins. Users cannot self-assign roles (claims are set only by functions).
+### 2. Admin portal is hidden and rules-enforced
+- `/admin/*`, lazy-loaded separate chunk, no links from user screens, `noindex`.
+- Only admins create invites (single-use, expiring, optionally email-bound). Only SUPER_ADMIN removes admins; admins can't change Super Admins or themselves.
 
-### 3. Drive storage
-- Folder tree mirrors the classification: `<Root>/<Playlist>/<Node>/.../<Verse N>/{audio,video}.*`. Learner submissions go to `<Playlist>/_Learners/<Name>_<uid>/<Verse>/<timestamp>.*` inside the Drive of the admin who owns that playlist.
-- Resolve target folder: playlist override > admin's global location. Create missing folders idempotently.
-- OAuth scope `drive.file`; use Google Picker for folder selection. Refresh tokens are encrypted and used only inside functions. Never expose Drive links or tokens to the client.
-- Changing location affects new uploads only; offer an explicit "move existing files" action.
-- Uploads are resumable with progress and retry. Handle token expiry/quota with exponential backoff and a "reconnect Drive" state.
-- Learners stream via signed `stream_media` URLs; verify access on every URL issuance.
+### 3. Media
+- Built-in storage limit ~8.4 MB per file; recordings use 64 kbps audio / 360p 350 kbps video. Drive (optional) mirrors `<Root>/<Playlist>/<Node>/…/<Verse>/{audio,video}` and archives learner recordings to `<Playlist>/_Learners/<Name>_<uid>/<Verse>/`.
+- Media docs (and so chunks / Drive ids) are readable only by admins, the recording's learner, or learners with playlist access.
 
 ### 4. Monetisation
-- Free vs Paid per playlist: UPI ID, payee name, amount (INR). No payment gateway.
-- Learner pays externally, submits reference number (+ optional screenshot stored in Drive). Admin approves/rejects. Approval creates the access grant. Duplicate references are flagged.
-- `get_media_url` returns 403 for paid playlists without a grant (admins exempt). Metadata (description, materials list, badge) stays visible.
+- Free vs Paid per playlist: UPI ID, payee name, amount (INR). No gateway. Learner submits a reference (+ optional screenshot); admin approves/rejects; approval creates the access grant; references are unique unless previously rejected (then flagged).
 - UPI deep link: `upi://pay?pa=<id>&pn=<name>&am=<amount>&cu=INR&tn=<note>` plus QR.
 
 ### 5. Learning flow
-- On verse open: loop audio (and video if present) exactly **3 times** with counter 1/3 to 3/3, pause/restart, speed control. Same behaviour in admin preview.
-- Then guided 3-round learner recording, preview, re-record, submit.
-- Progress = approved verses / total verses, rolled up per node and playlist. Only admin approval counts.
+- On verse open: loop audio (and video if present) exactly **3 times** with counter, pause/restart, speed. Same in admin preview.
+- Then guided 3-round learner recording, preview, re-record, submit. Progress = approved verses / total; only admin approval counts.
 
 ### 6. Recording
-- `MediaRecorder` with feature detection and mime fallback (`audio/webm;codecs=opus` then `audio/mp4`; same for video). Handle permission denial gracefully. Admin verse form offers both **Record** and **Attach file** for audio and video.
+- `MediaRecorder` with feature detection and mime fallback (`audio/webm;codecs=opus` then `audio/mp4`; same for video). Handle permission denial gracefully. Admin verse form offers Record and Attach for audio and video.
 
 ## Frontend Conventions
 - Mobile-first; test at 360px, 768px, 1280px.
@@ -123,17 +80,12 @@ Public/learner-readable documents must never contain admin identity or Drive IDs
 - PWA: manifest, icons, standalone display, service worker with offline shell and metadata caching, install prompt, update toast.
 - Server state via TanStack Query + Firestore listeners; UI state via Zustand.
 
-## Functions Conventions
-- Python 3.12, type hints, pydantic for request validation, consistent error codes via `https_fn.HttpsError`.
-- Every callable verifies `request.auth` and the `role` claim first. Log structured JSON; never log tokens or PII.
-- Write an `auditLogs` entry for admin actions. Keep functions small; Drive code lives in a `drive/` module behind a `StorageProvider` interface with `GoogleDriveProvider` and `LocalMockProvider`.
-
 ## Workflow Expectations for Claude Code
-- Work in phases (see `docs/CLAUDE_CODE_PROMPT.md`); after each phase run `pytest functions`, web typecheck/lint/tests and rules tests, and fix failures before moving on.
+- After changes run web typecheck/lint/tests and `pnpm test:rules`, and fix failures before moving on.
 - Ask before adding major dependencies or changing the architecture.
 - Small commits with conventional messages (`feat:`, `fix:`, `chore:`).
-- Keep `MOCK_DRIVE=true` working so everything is demoable on the emulators without Google credentials.
-- Update `README.md` with Firebase project setup, Google Cloud OAuth setup (enable Drive API and Picker API, consent screen, authorised redirect URI = the `drive_oauth_callback` URL), Secret Manager commands, and `firebase deploy` steps.
+- Everything must stay demoable on the emulators without Google credentials (built-in Firestore storage).
+- Keep `README.md` current: free-plan setup, `scripts/deploy.sh`, optional Drive setup, trade-offs.
 
 ## Definition of Done
-Works on mobile and desktop, has loading/empty/error states, covered by tests for key logic and authorisation (including rules tests), respects anonymity and access rules, and is documented if it changes setup.
+Works on mobile and desktop, has loading/empty/error states, covered by tests for key logic and authorisation (rules tests for every trusted write), respects access rules, and is documented if it changes setup.

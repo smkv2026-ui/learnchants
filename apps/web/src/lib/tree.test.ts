@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildTree, descendants, flatten, pathTo, reorder } from './tree';
 import { orderedVerses, unlockedVerses } from './sequence';
-import { computeStreak, nodePct, pct } from './progress';
+import { computeStreak, nodeApproved, nodePct, pct, playlistPct } from './progress';
 
 const nodes = [
   { id: 'cham', parentId: null, name: 'Chamakam', order: 2 },
@@ -47,8 +47,10 @@ describe('progress', () => {
   it('computes percentages and node progress', () => {
     expect(pct(1, 3)).toBe(33);
     expect(pct(0, 0)).toBe(0);
-    const p = { pid: 'p', uid: 'u', approvedCount: 1, totalCount: 3, nodeApproved: { a1: 1 } };
-    expect(nodePct(p, nodes[3])).toBe(50);
+    const statuses = new Map([['v1', 'APPROVED'], ['v3', 'SUBMITTED']]);
+    expect(nodePct(nodes[3], nodes, verses, statuses)).toBe(50); // a1: v1 of v1,v2
+    expect(nodeApproved(nodes[1], nodes, verses, statuses)).toBe(1); // namakam rolls up
+    expect(playlistPct({ pid: 'p', uid: 'u', approvedCount: 1 }, 4)).toBe(25);
   });
   it('computes streaks that survive until midnight', () => {
     const today = new Date('2026-10-19T10:00:00Z');

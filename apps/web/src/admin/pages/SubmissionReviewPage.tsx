@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { collection, doc, limit, orderBy, query, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { api, errorMessage } from '@/lib/api';
-import { uploadMedia } from '@/lib/upload';
+import { errorMessage } from '@/lib/errors';
+import { reviewSubmission } from '@/lib/ops/review';
 import { sanitizeHtml } from '@/lib/sanitize';
 import { timeAgo } from '@/lib/format';
 import type { Reply, Submission, Verse } from '@/lib/types';
@@ -38,13 +38,14 @@ export default function SubmissionReviewPage() {
     if (status === 'NEEDS_WORK' && !text.trim() && !rec) return toast.error('Add a correction (text or recording) so the learner knows what to improve.');
     setBusy(status);
     try {
-      let replyMediaId: string | undefined;
-      if (rec) {
-        setProgress(0);
-        const up = await uploadMedia(rec.blob, { purpose: 'reply', playlistId: s.pid, submissionId: sid, kind: replyKind, mimeType: rec.mimeType, fileName: rec.fileName }, { onProgress: setProgress, durationSec: rec.durationSec });
-        replyMediaId = up.mediaId;
-      }
-      await api.reviewSubmission({ submissionId: sid, status, text: text.trim() || undefined, replyMediaId });
+      if (rec) setProgress(0);
+      await reviewSubmission(
+        { ...s, id: sid },
+        status,
+        text,
+        rec ? { blob: rec.blob, kind: replyKind, durationSec: rec.durationSec } : null,
+        setProgress,
+      );
       toast.success(status === 'APPROVED' ? 'Approved. The learner has been notified.' : 'Corrections sent.');
       setText('');
       setRec(null);
@@ -107,7 +108,7 @@ export default function SubmissionReviewPage() {
           )}
           <Card className="space-y-4 p-5">
             <h2 className="text-xl font-semibold">Your feedback</h2>
-            <p className="text-xs text-muted">Learners see replies from “Your Teacher”. Your name is never shown.</p>
+            <p className="text-xs text-muted">Learners see your reply labelled “Your Teacher”.</p>
             <TextArea label="Correction / encouragement" rows={4} value={text} onChange={(e) => setText(e.target.value)} maxLength={5000} placeholder="e.g. Lengthen the ‘ā’ in रुद्र; the svara rises on ‘ma’." />
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-2">

@@ -4,149 +4,100 @@ An installable, offline-capable Progressive Web App for learning Vedic and devot
 
 - **Teachers (admins)** build a hierarchy (Playlist → sub-playlists → sections → verses), record or attach audio/video for each verse, attach PDFs and notes, and review learner recordings.
 - **Learners** browse playlists, hear each verse **exactly 3 times**, chant it **3 times** in a guided recording, send it to their teacher, and watch their progress grow as verses are approved.
-- **Media lives in the teacher's Google Drive**, in folders that mirror the hierarchy. Playlists can be **free or paid via UPI** with manual approval. **Teacher identity is never shown to learners.**
+- Playlists can be **free or paid via UPI** with manual approval.
 
-The stack is Firebase only: Hosting, Auth, Firestore, Cloud Functions (Python 3.12), Storage (cover images only) and App Check. There is no Node.js/Express server. Requirements live in [`docs/BRD.md`](docs/BRD.md); architecture notes in [`docs/architecture.md`](docs/architecture.md).
+**This edition runs entirely on Firebase's free Spark plan**: Hosting, Authentication and Cloud Firestore only. There are no Cloud Functions and no Cloud Storage; the Firestore Security Rules are the backend. Media is stored in Firestore (chunked, up to ~8 MB per file), or optionally in the teacher's Google Drive. Teacher anonymity was given up to make this possible (see [Trade-offs](#5-free-plan-trade-offs)). The earlier Blaze-plan version with Python Cloud Functions is in git history (commit `f6dd783`).
 
 ```
 apps/web            React 18 + TypeScript + Vite PWA (learner app + lazy-loaded admin portal)
-functions           Python Cloud Functions (lc/ business logic, drive/ storage providers, tests/)
-firestore.rules     Firestore Security Rules (primary authorisation layer)
-storage.rules       Storage rules (public cover images only)
-firebase.json       Hosting (+ rewrites to functions), Functions, Emulators
-scripts             bootstrap_super_admin.py, seed_demo.py
+firestore.rules     Firestore Security Rules: roles, access, payments, reviews (the "backend")
+firestore.indexes.json
+firebase.json       Hosting + Firestore + emulators
+scripts             deploy.sh, bootstrap_super_admin.py, seed_demo.py
 docs                BRD, build prompt, architecture
 ```
 
 ---
 
-## 1. Run it locally in 5 minutes (no Google credentials needed)
+## 1. Put it live (free) in ~15 minutes
 
-Prerequisites: Node 20+, pnpm 9+, Python 3.12, Java 17+ (for the emulators), Firebase CLI (`npm i -g firebase-tools`).
-
-```bash
-# install
-pnpm install
-python3.12 -m venv functions/venv
-functions/venv/bin/pip install -r functions/requirements-dev.txt
-cp functions/.secret.local.example functions/.secret.local    # emulator-only secret values
-
-# terminal 1: Auth, Firestore, Functions, Hosting, Storage emulators (project "demo-learnchants")
-pnpm emulators
-
-# terminal 2: first Super Admin + demo content (Sri Rudram > Namakam/Chamakam > 11 anuvakams, a paid playlist, demo learner)
-SUPER_ADMIN_EMAIL=guru@demo.test SUPER_ADMIN_PASSWORD=guru12345 \
-  functions/venv/bin/python scripts/bootstrap_super_admin.py --emulators
-functions/venv/bin/python scripts/seed_demo.py --emulators
-
-# terminal 3: the web app against the emulators
-pnpm dev:emu            # http://localhost:5173
-```
-
-- Learner: `learner@demo.test` / `learner123` (or sign up).
-- Teacher portal: **http://localhost:5173/admin/login** (deliberately not linked anywhere in the learner UI) with `guru@demo.test` / `guru12345`.
-- `functions/.env.demo-learnchants` sets `MOCK_DRIVE=true`, so "Drive" files are written to **`.mock_drive/`** in the repo root using the same mirrored folder structure, e.g. `.mock_drive/LearnChants/Sri Rudram/Namakam/Anuvakam 1/Verse 2/audio/audio.wav` and learner recordings under `.mock_drive/LearnChants/Sri Rudram/_Learners/<Name>_<uid>/Verse 2/…`.
-- To test the production build through Hosting rewrites instead: `pnpm --filter web build:emu`, then open http://127.0.0.1:5000.
-
-## 2. Tests and checks
-
-| Command | What it covers |
-|---|---|
-| `functions/venv/bin/python -m pytest functions` (`pnpm test:functions`) | 74 tests: every callable's authorisation, invites/roles, uploads + mirrored Drive folders, storage relocation/override/move, signed media URLs + HTTP Range, payments (duplicate refs, resubmission, revoke), review + progress roll-ups, triggers, and an anonymity scan of all learner-readable data and responses |
-| `pnpm --filter web test` | Unit/component tests: exactly-3x loop logic and `LoopPlayer`, resumable upload (chunking + resume after network error), UPI deep link, sanitiser, tree/reorder, sequential unlocking, streaks |
-| `pnpm test:rules` | Firestore rules tests (`@firebase/rules-unit-testing`, starts the Firestore emulator): each role, forged/stale admin claims, functions-only collections, no identity fields in learner-readable docs |
-| `pnpm --filter web typecheck` / `lint` / `build` | TypeScript, ESLint, production build + service worker |
-
-## 3. Deploy to Firebase (live URL)
-
-> **Free (Spark) vs Blaze.** Firebase's free Spark plan cannot run Cloud Functions at all, and this app needs them for everything that must stay secret or trusted (Drive tokens, signed media links, roles, payments, reviews). The project must be on **Blaze (pay-as-you-go)**, which keeps the same free monthly quotas; a small class typically pays ₹0. Add a card, then set a budget alert (e.g. ₹100) under *Billing → Budgets & alerts*.
-
-### Quickest path: one command in Google Cloud Shell
-1. Create the project, upgrade to Blaze, enable Authentication (Email/Password + Google), create Firestore, click *Get started* on Storage (steps 1-5 below).
-2. Open <https://shell.cloud.google.com>, then:
+1. **Create the project**: <https://console.firebase.google.com> → *Add project* (keep the free Spark plan).
+2. **Authentication** → *Get started* → enable **Google** and **Email/Password**.
+3. **Deploy** from Google Cloud Shell (<https://shell.cloud.google.com>, nothing to install):
    ```bash
    git clone https://github.com/smkv2026-ui/learnchants.git && cd learnchants
    git checkout claude/magical-lovelace-3nl88m
-   ./scripts/deploy.sh <project-id> <your-google-email>
+   ./scripts/deploy.sh <your-project-id> <your-google-email>
    ```
-   The script writes the web config, generates the encryption/signing secrets, builds and deploys, and prints `https://<project-id>.web.app`.
-3. Open `https://<project-id>.web.app/admin/login` and **Sign in with Google** as that email. Because `BOOTSTRAP_SUPER_ADMIN_EMAIL` is set, that first verified sign-in becomes Super Admin (only while no Super Admin exists).
-4. Drive: until you finish section 3.2 and re-run the script with `GOOGLE_CLIENT_ID=… GOOGLE_CLIENT_SECRET=… GOOGLE_API_KEY=… GOOGLE_PROJECT_NUMBER=… ./scripts/deploy.sh …`, learners can browse, but teachers can't upload media yet ("Google Drive is not configured yet").
+   It writes your email into the rules, creates the Firestore database (region `asia-south1`; override with `FIRESTORE_LOCATION=…`), builds and deploys, then prints **`https://<project-id>.web.app`**.
+4. **Become Super Admin**: open `https://<project-id>.web.app/admin/login` and click **Sign in with Google** with that email. (Only a *verified* sign-in with that exact email can claim Super Admin; email/password accounts are not verified, so use Google.)
+5. Create playlists, sections and verses; invite other teachers from **Admins → Invite admin**.
 
-The manual steps below describe the same thing in detail.
+Re-run `./scripts/deploy.sh …` after pulling updates.
 
-### 3.1 Firebase project
-1. Create a project at <https://console.firebase.google.com> and **upgrade it to the Blaze (pay-as-you-go) plan**. Cloud Functions require Blaze; a small app usually stays within the free usage tiers.
-2. **Authentication** → Sign-in method: enable *Email/Password* and *Google*. Add your hosting domain to *Authorized domains* (the `*.web.app` domain is added automatically).
-3. **Firestore Database** → create (production mode, region of your choice).
-4. **Storage** → get started (used only for public cover images).
-5. **Hosting** → get started.
-6. **App Check** → register the web app with **reCAPTCHA v3**, copy the site key into `VITE_APPCHECK_SITE_KEY`. After verifying traffic, enforce App Check for Firestore/Storage in the console and set `ENFORCE_APP_CHECK=true` in `functions/.env.<project-id>` to enforce it on callable functions.
-7. Project settings → *Your apps* → add a **Web app**; copy its config into `apps/web/.env.local` (see `apps/web/.env.example`).
+### Optional: Google Drive (for long videos)
+Built-in storage holds files up to ~8 MB (several minutes of audio, ~2.5 minutes of the app's 360p video). To keep larger teacher videos in your own Drive:
+1. Google Cloud console → same project → *APIs & Services*: enable **Google Drive API** and **Google Picker API**.
+2. *OAuth consent screen*: External, add scope `…/auth/drive.file`, add your teachers as test users (or publish).
+3. *Credentials* → **OAuth client ID** (Web): Authorised JavaScript origin `https://<project-id>.web.app`. No redirect URI is needed.
+4. *Credentials* → **API key**, restricted to the Drive and Picker APIs and your site.
+5. Redeploy: `GOOGLE_CLIENT_ID=… GOOGLE_API_KEY=… GOOGLE_PROJECT_NUMBER=… ./scripts/deploy.sh <project-id> <email>`.
+
+Teachers then click **Connect Google Drive** (Settings, the verse editor, or a playlist's Storage tab). Uploads go to `LearnChants/<Playlist>/<Section>/…/<Verse>/audio|video`, shared "anyone with the link" so learners can stream them; reviewed learner recordings are archived to `<Playlist>/_Learners/<Name>_<uid>/<Verse>/` to free Firestore space.
+
+## 2. Run locally (emulators, no Google account needed)
+
+Prerequisites: Node 20+, pnpm 9+, Python 3.10+, Java 17+, Firebase CLI (`npm i -g firebase-tools`).
 
 ```bash
-firebase login
-firebase use --add            # select your project, alias "default"
+pnpm install
+python3 -m venv scripts/.venv && scripts/.venv/bin/pip install -r scripts/requirements.txt
+
+pnpm emulators                       # terminal 1: Auth, Firestore, Hosting (project demo-learnchants)
+
+# terminal 2: first Super Admin + demo content
+SUPER_ADMIN_EMAIL=guru@demo.test SUPER_ADMIN_PASSWORD=guru12345 \
+  scripts/.venv/bin/python scripts/bootstrap_super_admin.py --emulators
+scripts/.venv/bin/python scripts/seed_demo.py --emulators
+
+pnpm dev:emu                         # terminal 3: http://localhost:5173
 ```
 
-### 3.2 Google Cloud setup for Drive
-In <https://console.cloud.google.com> for the same project:
-1. **APIs & Services → Library**: enable **Google Drive API** and **Google Picker API**.
-2. **OAuth consent screen**: External (or Internal for Workspace), add scope `https://www.googleapis.com/auth/drive.file`; while in *Testing* add your teachers as test users (or publish the app).
-3. **Credentials → Create OAuth client ID → Web application**:
-   - Authorised JavaScript origins: `https://<project-id>.web.app` (and `http://localhost:5173` for development).
-   - Authorised redirect URI: **`https://<project-id>.web.app/drive/callback`**. Firebase Hosting rewrites this path to the `drive_oauth_callback` function (you may instead register the function URL `https://us-central1-<project-id>.cloudfunctions.net/drive_oauth_callback`, but then set `APP_URL` accordingly).
-4. **Credentials → Create API key**, restrict it to the Picker API and your web origin → `VITE_GOOGLE_API_KEY`.
-5. Put the OAuth client id in `VITE_GOOGLE_CLIENT_ID` and the **project number** in `VITE_GOOGLE_APP_ID`.
+- Learner: `learner@demo.test` / `learner123`. Teacher portal: <http://localhost:5173/admin/login> with `guru@demo.test` / `guru12345`.
+- The demo has Sri Rudram (Namakam/Chamakam × 11 anuvakams, sample audio) and a paid Purusha Suktam (₹199).
 
-### 3.3 Secrets and params
-```bash
-firebase functions:secrets:set GOOGLE_CLIENT_ID          # OAuth client id
-firebase functions:secrets:set GOOGLE_CLIENT_SECRET      # OAuth client secret
-firebase functions:secrets:set TOKEN_ENCRYPTION_KEY      # e.g. `openssl rand -base64 32` (AES-256-GCM for Drive refresh tokens)
-firebase functions:secrets:set MEDIA_TOKEN_SECRET        # e.g. `openssl rand -base64 48` (HMAC for media URLs + OAuth state)
+## 3. Tests and checks
 
-cp functions/.env.example functions/.env.<project-id>
-# edit: APP_URL=https://<project-id>.web.app, MOCK_DRIVE=false, ENFORCE_APP_CHECK=true|false
-```
-`MOCK_DRIVE` must be `false` in production (Cloud Functions disks are ephemeral).
+| Command | What it covers |
+|---|---|
+| `pnpm test:rules` | **The security model**: Firestore rules tests (starts the Firestore emulator): public vs draft content, paid media locked until a grant, private learner recordings and upload limits, no self-promotion, owner bootstrap only when verified, single-use expiring email-bound invites, deactivated admins, learners can't approve or inflate progress, payment reference uniqueness/resubmission, admin-only approvals |
+| `pnpm --filter web test` | Unit/component tests: exactly-3x loop and `LoopPlayer`, resumable Drive upload (resume after network error), UPI deep link, sanitiser, tree/progress roll-ups, sequential unlocking, streaks |
+| `pnpm --filter web typecheck` / `lint` / `build` | TypeScript, ESLint, production build + service worker |
 
-### 3.4 Build and deploy
-```bash
-python3.12 -m venv functions/venv && functions/venv/bin/pip install -r functions/requirements.txt   # the CLI packages this venv
-pnpm install && pnpm build                 # apps/web/dist
-firebase deploy                            # hosting, functions, firestore rules + indexes, storage rules
-```
-The live app is at `https://<project-id>.web.app`.
+## 4. How it works
+- **Roles**: an active `adminUsers/{uid}` record makes someone an admin; the rules check it on every request. The first Super Admin is the owner email in `firestore.rules` (verified sign-in). Others join via invites (random 256-bit token; the rules validate email, expiry and single use). Only a Super Admin can remove admins; admins can't touch Super Admins.
+- **Hidden admin portal**: `/admin/*` is a separate lazy chunk, never linked from learner screens and marked `noindex`; authorisation is enforced by the rules, not by hiding.
+- **Media**: `media/{id}` is a registry; bytes are in `media/{id}/chunks/{n}` (≤700 KB each, ≤12 chunks) or in Drive (`driveFileId`). The rules only reveal a media doc (and so its chunks or Drive id) to admins, the learner who recorded it, or learners with access to the playlist (paid playlists need an approved grant).
+- **Payments**: one request per learner and playlist (`paymentRequests/{uid}_{pid}`). The reference is claimed in `paymentRefs/{ref}` in the same batch, so it can't be reused while pending or approved; reusing a rejected reference is allowed but flagged. The rules check the amount equals the playlist price. Approval writes the access grant.
+- **Reviews and progress**: teachers' approvals update the learner's verse status and approved count (learners can only ever mark a verse "submitted"). Section and playlist progress are computed from verse statuses and the tree.
+- **Offline**: app shell via service worker; Firestore offline persistence also caches verse audio stored in Firestore, so recently played verses work offline.
 
-Create the first Super Admin against production using Application Default Credentials (`gcloud auth application-default login`):
-```bash
-SUPER_ADMIN_EMAIL=you@example.org SUPER_ADMIN_PASSWORD='choose-one' \
-  functions/venv/bin/python scripts/bootstrap_super_admin.py --project <project-id>
-```
-Then sign in at `/admin/login`, open **Settings → Connect Google Drive**, and choose (or create) the root folder. Invite more teachers from **Admins → Invite admin** (single-use links that expire after 7 days).
+## 5. Free-plan trade-offs
+- **Teacher anonymity is not guaranteed.** Learners still never see admin records, but replies store the teacher's uid, and Drive files (if used) are owned by the teacher's Google account.
+- **Paid content protection is weaker**: anyone with access can save the audio, and a Drive link (if used) works for anyone it's shared with.
+- **Quotas** (Spark, per day): 50k document reads, 20k writes, 1 GiB stored. A verse play reads 1-2 chunk documents (cached afterwards); a 1-minute recording is ~0.5 MB. This suits a class of tens of learners. Connect Drive and let reviews archive recordings to keep Firestore storage low.
+- **Drive connection is per browser session** (no server to hold a refresh token): teachers click "Connect Google Drive" when they need it.
+- **Admin removal** takes effect immediately (rules check the record on every request).
+- Upgrading later to Blaze needs no data migration for content; the Functions-based edition is in git history.
 
-## 4. How things work (short)
-- **Roles** are `role` custom claims (`SUPER_ADMIN`, `ADMIN`, `USER`) set only by functions/scripts. New sign-ups call `init_profile`, which assigns `USER`. Rules additionally require an *active* `adminUsers/{uid}` record, so deactivating an admin takes effect immediately.
-- **Hidden admin portal**: `/admin/*` is a separate lazy chunk, never linked from learner screens, marked `noindex`; every function re-checks the role claim.
-- **Uploads**: `create_upload_session` resolves the target folder (per-playlist override → admin's default → auto-created `LearnChants`), creates mirrored folders idempotently (ids cached by entity id so renames stay in sync), and returns a Drive **resumable session URI**; the browser uploads straight to Drive in 4 MB chunks with progress, retry and resume; `finalize_upload` locates the file by its `mediaId` app property and records metadata.
-- **Playback**: `get_media_url` checks access (paid playlists need an approved grant; admins exempt) and returns `/media/<HMAC-signed 15-minute token>`; `stream_media` streams from Drive with HTTP Range support. Clients never see Drive ids, links or tokens.
-- **Anonymity**: learner-readable documents have no author/owner fields (rules reject them); replies are labelled "Your Teacher"; the acting admin is recorded only in `auditLogs`.
+## 6. Decisions and defaults
+- **Chant thrice** = one recording with an on-screen Round 1/2/3 counter.
+- **Paid access** is lifetime until an admin revokes it. **Sequential unlocking** is optional per playlist (UI-enforced).
+- Covers are stored inline as small WebP images (Spark has no Cloud Storage).
+- Learner recordings use 64 kbps audio / 360p 350 kbps video to fit built-in storage.
 
-## 5. Decisions and defaults (from the BRD's open questions)
-- **Chant thrice** = one recording with an on-screen Round 1/2/3 counter (“Next round” between repetitions).
-- **Paid access** is lifetime (until an admin revokes it).
-- **Sequential unlocking** is optional per playlist (off by default). It is a learning aid enforced in the UI.
-- **Materials**: the list is visible to everyone; opening a material *file* of a paid playlist requires access (text notes are always readable).
-- **Duplicate payment references**: a reference already *pending/approved* is rejected; re-using a *rejected* reference is allowed but flagged for the admin.
-- **Deleting content** moves the verse's Drive files to the Drive trash (recoverable); learner submissions are kept. Deleting a whole playlist leaves its Drive folder in place.
-- **Storage location changes** apply to new uploads; “move existing files” is explicit (Settings, or per playlist).
-- Learner progress per verse is stored at `users/{uid}/progress/{pid}/verseStatus/{vid}` (named `verseStatus` instead of `verses` so collection-group queries don't collide with `playlists/*/verses`).
-- `wavesurfer.js` was not needed: live waveforms use the Web Audio `AnalyserNode` for both playback and recording, which also works with streamed Range responses.
-- Recently played media is not cached by the service worker: media URLs are short-lived signed tokens. The app shell, fonts, covers and Firestore metadata (offline persistence) work offline.
-
-## 6. Troubleshooting
-- *“The teacher's storage is not connected”*: the playlist owner must connect Drive in Settings (or use `MOCK_DRIVE=true` locally).
-- *Red “Reconnect Drive” banner*: the refresh token was revoked/expired; click **Reconnect Drive**.
-- *Functions emulator can't find Python*: create `functions/venv` with Python 3.12 as shown above.
-- *Microphone/camera blocked*: browsers only allow recording on HTTPS or `localhost`.
+## 7. Troubleshooting
+- *“You don’t have permission to do that”* when becoming admin: sign in with **Google** using exactly the email passed to `deploy.sh`.
+- *“File is too large for built-in storage”*: connect Google Drive (teachers) or record a shorter take.
+- *“The free daily quota has been reached”*: wait until the quota resets (midnight Pacific time) or upgrade to Blaze.
+- Microphone/camera need HTTPS (`*.web.app`) or `localhost`.

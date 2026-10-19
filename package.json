@@ -9,7 +9,6 @@
     "test:rules": "pnpm --filter web test:rules",
     "emulators": "firebase emulators:start --project demo-learnchants",
     "emulators:persist": "mkdir -p emulator-data && firebase emulators:start --project demo-learnchants --import=./emulator-data --export-on-exit",
-    "dev:emu": "pnpm --filter web dev:emu",
-    "test:functions": "functions/venv/bin/python -m pytest functions"
+    "dev:emu": "pnpm --filter web dev:emu"
   }
 }

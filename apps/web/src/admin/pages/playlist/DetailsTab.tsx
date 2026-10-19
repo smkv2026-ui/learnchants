@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { collection, deleteDoc, doc, getDocs, serverTimestamp, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
-import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
-import { db, storage } from '@/lib/firebase';
-import { errorMessage } from '@/lib/api';
+import { db } from '@/lib/firebase';
+import { deleteMedia } from '@/lib/media';
+import { errorMessage } from '@/lib/errors';
 import { isValidUpiId } from '@/lib/upi';
 import type { PaymentInfo, Playlist, WithId } from '@/lib/types';
 import { toast } from '@/stores/ui';
@@ -11,7 +11,7 @@ import { useDoc } from '@/hooks/useFirestore';
 import { Button, Card, Icon, Switch, TextArea, TextField, cn } from '@/components/ui';
 import { CoverArt } from '@/components/learner/PlaylistCard';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
-import { resizeImage } from '../../components/image';
+import { imageToDataUrl } from '@/lib/image';
 
 export function DetailsTab({ pid, playlist }: { pid: string; playlist: WithId<Playlist> }) {
   const navigate = useNavigate();
@@ -74,10 +74,7 @@ export function DetailsTab({ pid, playlist }: { pid: string; playlist: WithId<Pl
     if (!f.type.startsWith('image/')) return toast.error('Please choose an image.');
     setUploading(true);
     try {
-      const blob = await resizeImage(f);
-      const r = storageRef(storage, `covers/${pid}/cover-${Date.now()}.${blob.type === 'image/webp' ? 'webp' : 'jpg'}`);
-      await uploadBytes(r, blob, { contentType: blob.type, cacheControl: 'public,max-age=31536000' });
-      await updateDoc(doc(db, 'playlists', pid), { coverUrl: await getDownloadURL(r), updatedAt: serverTimestamp() });
+      await updateDoc(doc(db, 'playlists', pid), { coverUrl: await imageToDataUrl(f), updatedAt: serverTimestamp() });
       toast.success('Cover updated');
     } catch (err) {
       toast.error(errorMessage(err));
@@ -87,11 +84,14 @@ export function DetailsTab({ pid, playlist }: { pid: string; playlist: WithId<Pl
   };
 
   const remove = async () => {
-    // Delete content docs; triggers clean up Drive files for verses.
+    // Remove stored media (Firestore chunks / Drive files) first, then the content docs.
     const batch = writeBatch(db);
     for (const sub of ['verses', 'nodes', 'materials', 'payment']) {
       const snap = await getDocs(collection(db, 'playlists', pid, sub));
-      snap.docs.forEach((d) => batch.delete(d.ref));
+      for (const d of snap.docs) {
+        for (const key of ['audioMediaId', 'videoMediaId', 'mediaId']) await deleteMedia(d.data()[key]).catch(() => undefined);
+        batch.delete(d.ref);
+      }
     }
     batch.delete(doc(db, 'playlists', pid));
     await batch.commit();
@@ -136,7 +136,7 @@ export function DetailsTab({ pid, playlist }: { pid: string; playlist: WithId<Pl
             </div>
             <p className="flex gap-2 text-sm text-warn">
               <Icon name="info" size={18} className="mt-0.5 shrink-0" />
-              The UPI ID and payee name are visible to anyone who pays. To keep teachers anonymous, use a neutral organisation or trust UPI ID rather than a personal one.
+              The UPI ID and payee name are visible to anyone who pays. A neutral organisation or trust UPI ID keeps personal details private.
             </p>
           </div>
         )}
@@ -159,7 +159,7 @@ export function DetailsTab({ pid, playlist }: { pid: string; playlist: WithId<Pl
           {playlist.coverUrl ? 'Replace cover' : 'Upload cover'}
         </Button>
         <input ref={file} type="file" accept="image/*" className="hidden" onChange={(e) => void uploadCover(e.target.files?.[0])} />
-        <p className="mt-2 text-xs text-muted">Resized to ≤1400px WebP. Stored in Firebase Storage (public).</p>
+        <p className="mt-2 text-xs text-muted">Compressed to a small WebP and stored with the playlist (public).</p>
       </Card>
 
       <ConfirmDialog

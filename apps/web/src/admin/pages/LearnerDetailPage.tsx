@@ -3,7 +3,7 @@ import { collection, doc, orderBy, query, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { playlistPct } from '@/lib/progress';
 import { timeAgo } from '@/lib/format';
-import type { Progress, Submission } from '@/lib/types';
+import type { Playlist, Progress, Submission } from '@/lib/types';
 import { useCollection, useDoc } from '@/hooks/useFirestore';
 import { Breadcrumbs, Card, EmptyState, Icon, ListSkeleton, ProgressRing, StatusChip } from '@/components/ui';
 import { AdminHeader } from '../components/AdminLayout';
@@ -13,6 +13,8 @@ export default function LearnerDetailPage() {
   const user = useDoc<{ displayName?: string; email?: string }>(uid ? doc(db, 'users', uid) : null);
   const progress = useCollection<Progress>(uid ? collection(db, 'users', uid, 'progress') : null, `lp-${uid}`);
   const subs = useCollection<Submission>(uid ? query(collection(db, 'submissions'), where('uid', '==', uid), orderBy('createdAt', 'desc')) : null, `ls-${uid}`);
+  const playlists = useCollection<Playlist>(collection(db, 'playlists'), 'ld-playlists');
+  const verseCount = new Map(playlists.data.map((p) => [p.id, p.verseCount ?? 0]));
   const grants = useCollection<{ pid: string }>(uid ? query(collection(db, 'accessGrants'), where('uid', '==', uid)) : null, `lg-${uid}`);
 
   return (
@@ -29,10 +31,10 @@ export default function LearnerDetailPage() {
           ) : (
             progress.data.map((p) => (
               <Card key={p.id} className="flex items-center gap-4 p-4">
-                <ProgressRing value={playlistPct(p)} size={56} />
+                <ProgressRing value={playlistPct(p, verseCount.get(p.pid))} size={56} />
                 <div>
                   <p className="font-semibold">{p.title}</p>
-                  <p className="text-xs text-muted">{p.approvedCount} / {p.totalCount} approved · updated {timeAgo(p.updatedAt)}</p>
+                  <p className="text-xs text-muted">{p.approvedCount} / {verseCount.get(p.pid) ?? 0} approved · updated {timeAgo(p.updatedAt)}</p>
                 </div>
               </Card>
             ))

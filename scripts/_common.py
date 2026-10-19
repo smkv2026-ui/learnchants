@@ -1,8 +1,8 @@
-"""Shared setup for one-off scripts.
+"""Shared setup for the one-off scripts (Firestore + Auth via firebase-admin).
 
-Works against the emulators when ``FIRESTORE_EMULATOR_HOST`` /
-``FIREBASE_AUTH_EMULATOR_HOST`` are set (``--emulators`` sets them for you), or
-against a real project using Application Default Credentials.
+Use ``--emulators`` for the local Emulator Suite (no credentials needed), or
+Application Default Credentials (``gcloud auth application-default login``)
+against a real project.
 """
 
 from __future__ import annotations
@@ -10,10 +10,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-from pathlib import Path
-
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "functions"))
+from datetime import datetime, timezone
 
 
 def parse_args(description: str, extra=None) -> argparse.Namespace:
@@ -31,27 +28,30 @@ def parse_args(description: str, extra=None) -> argparse.Namespace:
     return args
 
 
-def make_deps(mock_drive: bool | None = None):
-    from firebase_admin import auth, firestore
+def init():
+    """Return (firestore client, auth module)."""
+    import firebase_admin
+    from firebase_admin import auth, credentials, firestore
 
-    from lc.config import Config
-    from lc.core import Deps
-    from lc.storage import default_storage_factory
+    if not firebase_admin._apps:  # noqa: SLF001
+        cred = None
+        if os.environ.get("FIRESTORE_EMULATOR_HOST"):
+            from google.auth.credentials import AnonymousCredentials
 
-    from lc.firebase_app import init_app
+            class _EmulatorCredential(credentials.Base):
+                def get_credential(self):
+                    return AnonymousCredentials()
 
-    init_app(os.environ["GCLOUD_PROJECT"])
-    config = Config.from_env()
-    if mock_drive is not None:
-        from dataclasses import replace
-
-        config = replace(config, mock_drive=mock_drive)
-    return Deps(db=firestore.client(), auth=auth, config=config, storage_factory=default_storage_factory)
+            cred = _EmulatorCredential()
+        firebase_admin.initialize_app(cred, options={"projectId": os.environ["GCLOUD_PROJECT"]})
+    return firestore.client(), auth
 
 
-def get_or_create_user(deps, email: str, password: str | None, name: str):
-    from firebase_admin import auth
+def now() -> datetime:
+    return datetime.now(timezone.utc)
 
+
+def get_or_create_user(auth, email: str, password: str | None, name: str):
     try:
         return auth.get_user_by_email(email)
     except auth.UserNotFoundError:

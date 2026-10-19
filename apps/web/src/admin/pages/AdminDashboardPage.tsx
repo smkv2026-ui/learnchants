@@ -18,11 +18,12 @@ export default function AdminDashboardPage() {
   const playlists = useCollection<Playlist>(query(collection(db, 'playlists'), orderBy('order')), 'dash-playlists');
   const popular = useMemo(() => {
     const by = new Map<string, { learners: number; approved: number; total: number }>();
+    const counts = new Map(playlists.data.map((p) => [p.id, p.verseCount ?? 0]));
     progress.forEach((p) => {
       const r = by.get(p.pid) ?? { learners: 0, approved: 0, total: 0 };
       r.learners += 1;
       r.approved += p.approvedCount || 0;
-      r.total += p.totalCount || 0;
+      r.total += counts.get(p.pid) ?? 0;
       by.set(p.pid, r);
     });
     return playlists.data

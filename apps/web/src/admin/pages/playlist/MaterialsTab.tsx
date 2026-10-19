@@ -1,8 +1,8 @@
 import { useRef, useState } from 'react';
-import { addDoc, collection, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { addDoc, collection, deleteDoc, doc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { errorMessage } from '@/lib/api';
-import { uploadMedia } from '@/lib/upload';
+import { errorMessage } from '@/lib/errors';
+import { deleteMedia, storeMedia } from '@/lib/media';
 import { buildTree, flatten } from '@/lib/tree';
 import { formatBytes } from '@/lib/format';
 import type { Material } from '@/lib/types';
@@ -41,7 +41,8 @@ export function MaterialsTab({ pid }: { pid: string }) {
       });
       if (needsFile && file) {
         setProgress(0);
-        await uploadMedia(file, { purpose: 'material', playlistId: pid, materialId: ref.id, fileName: file.name }, { onProgress: setProgress });
+        const mediaId = await storeMedia(file, { purpose: 'material', pid, fileName: file.name }, { onProgress: setProgress, nodeId: form.nodeId || null, useDrive: true });
+        await updateDoc(ref, { mediaId, mimeType: file.type, sizeBytes: file.size, status: 'ready' });
       }
       toast.success('Material added');
       setOpen(false);
@@ -76,7 +77,7 @@ export function MaterialsTab({ pid }: { pid: string }) {
                   <p className="text-xs text-muted">{nodeName(m.nodeId)} · {m.type} {m.sizeBytes ? `· ${formatBytes(m.sizeBytes)}` : ''}</p>
                 </div>
                 {m.status === 'uploading' && <Badge tone="warn">uploading</Badge>}
-                <IconButton icon="trash" label={`Delete ${m.title}`} size="sm" onClick={() => void deleteDoc(doc(db, 'playlists', pid, 'materials', m.id)).catch((e) => toast.error(errorMessage(e)))} />
+                <IconButton icon="trash" label={`Delete ${m.title}`} size="sm" onClick={() => void deleteMedia(m.mediaId).then(() => deleteDoc(doc(db, 'playlists', pid, 'materials', m.id))).catch((e) => toast.error(errorMessage(e)))} />
               </Card>
             </li>
           ))}

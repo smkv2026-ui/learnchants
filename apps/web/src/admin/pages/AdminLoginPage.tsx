@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { signInWithEmailAndPassword, signInWithPopup, signOut } from 'firebase/auth';
 import { auth, googleProvider } from '@/lib/firebase';
-import { errorMessage } from '@/lib/api';
+import { errorMessage } from '@/lib/errors';
 import { completeSignIn } from '@/lib/session';
+import { tryBootstrapOwner } from '@/lib/ops/profile';
 import { isAdminRole, useAuth } from '@/stores/auth';
 import { Button, Card, TextField } from '@/components/ui';
 import { Logo } from '@/components/layout/Logo';
@@ -27,6 +28,7 @@ export default function AdminLoginPage() {
     // Ensures the profile/role claim exists (and performs the one-time owner
     // bootstrap). Claims are checked server-side everywhere; this only improves UX.
     await completeSignIn();
+    await tryBootstrapOwner();
     const r = await useAuth.getState().refreshClaims();
     if (!isAdminRole(r)) {
       await signOut(auth);

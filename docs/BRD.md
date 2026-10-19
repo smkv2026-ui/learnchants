@@ -2,6 +2,8 @@
 
 Version 1.0 | Date: 19 Oct 2026 | Status: Draft for build
 
+> **Edition note (Oct 2026):** the owner chose to run on Firebase's free Spark plan and gave up teacher anonymity (section 6.8) to do so. There are no Cloud Functions; media defaults to built-in Firestore storage with Google Drive optional. See `CLAUDE.md` and `README.md` for the current architecture.
+
 ---
 
 ## 1. Purpose and Vision

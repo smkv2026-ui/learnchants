@@ -11,7 +11,7 @@ import {
   updateProfile,
 } from 'firebase/auth';
 import { auth, googleProvider } from '@/lib/firebase';
-import { errorMessage } from '@/lib/api';
+import { errorMessage } from '@/lib/errors';
 import { completeSignIn } from '@/lib/session';
 import { toast } from '@/stores/ui';
 import { Button, Card, TextField } from '@/components/ui';

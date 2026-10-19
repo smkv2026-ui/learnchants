@@ -2,8 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { collection, deleteDoc, doc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { errorMessage } from '@/lib/api';
-import { uploadMedia } from '@/lib/upload';
+import { errorMessage } from '@/lib/errors';
+import { MAX_FIRESTORE_BYTES, deleteMedia, deleteVerseMedia, storeMedia } from '@/lib/media';
+import { driveConfigured, driveConnected, useDrive } from '@/lib/media/drive';
+import { DriveConnect } from '../components/DriveConnect';
+import { recountVerses } from '@/lib/ops/content';
 import { buildTree, byOrder, flatten } from '@/lib/tree';
 import { useNodes, usePlaylist, useVerses } from '@/hooks/useLearner';
 import { toast } from '@/stores/ui';
@@ -36,6 +39,7 @@ export default function VerseEditorPage() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [resetKey, setResetKey] = useState(0);
   const loadedFor = useRef<string | null>(null);
+  useDrive((s) => s.token); // re-render when Drive connects (changes size limits/destination)
 
   // Load existing verse once.
   useEffect(() => {
@@ -80,14 +84,21 @@ export default function VerseEditorPage() {
         const order = verses.data.filter((v) => v.nodeId === nodeId).reduce((m, v) => Math.max(m, v.order ?? 0), 0) + 1;
         await setDoc(ref, { ...base, order, hasAudio: false, hasVideo: false, createdAt: serverTimestamp() });
       }
+      if (!vid || existing?.nodeId !== nodeId) await recountVerses(pid);
       for (const [rec, kind] of [[audio, 'audio'], [video, 'video']] as const) {
         if (!rec) continue;
-        setProgress({ label: `Uploading ${kind} to Drive`, value: 0 });
-        await uploadMedia(
+        const label = `Uploading ${kind}${driveConnected() ? ' to Google Drive' : ''}`;
+        setProgress({ label, value: 0 });
+        const mediaId = await storeMedia(
           rec.blob,
-          { purpose: kind === 'audio' ? 'verse_audio' : 'verse_video', playlistId: pid, verseId: ref.id, mimeType: rec.mimeType, fileName: rec.fileName },
-          { onProgress: (v) => setProgress({ label: `Uploading ${kind} to Drive`, value: v }), durationSec: rec.durationSec },
+          { purpose: kind === 'audio' ? 'verse_audio' : 'verse_video', pid, vid: ref.id, kind, mimeType: rec.mimeType, fileName: rec.fileName },
+          { onProgress: (v) => setProgress({ label, value: v }), durationSec: rec.durationSec, useDrive: true },
         );
+        const previous = kind === 'audio' ? existing?.audioMediaId : existing?.videoMediaId;
+        await updateDoc(ref, kind === 'audio'
+          ? { audioMediaId: mediaId, hasAudio: true, audioMime: rec.mimeType }
+          : { videoMediaId: mediaId, hasVideo: true, videoMime: rec.mimeType });
+        if (previous && previous !== mediaId) await deleteMedia(previous).catch(() => undefined);
       }
       toast.success(vid ? 'Verse updated' : 'Verse saved');
       setAudio(null);
@@ -154,12 +165,13 @@ export default function VerseEditorPage() {
           </Card>
 
           <Card className="space-y-4 p-6">
+            {driveConfigured() && <DriveConnect compact />}
             <h2 className="flex items-center gap-2 text-xl font-semibold"><Icon name="mic" className="text-primary" /> Audio</h2>
-            <MediaInput kind="audio" value={audio} onChange={setAudio} hasExisting={!!existing?.hasAudio} maxBytes={50 * 1024 * 1024} />
+            <MediaInput kind="audio" value={audio} onChange={setAudio} hasExisting={!!existing?.hasAudio} maxBytes={driveConnected() ? 200 * 1024 * 1024 : MAX_FIRESTORE_BYTES} />
           </Card>
           <Card className="space-y-4 p-6">
             <h2 className="flex items-center gap-2 text-xl font-semibold"><Icon name="video" className="text-primary" /> Video <span className="text-sm font-normal text-muted">(optional)</span></h2>
-            <MediaInput kind="video" value={video} onChange={setVideo} hasExisting={!!existing?.hasVideo} maxBytes={500 * 1024 * 1024} />
+            <MediaInput kind="video" value={video} onChange={setVideo} hasExisting={!!existing?.hasVideo} maxBytes={driveConnected() ? 1024 * 1024 * 1024 : MAX_FIRESTORE_BYTES} />
           </Card>
 
           {progress && <UploadProgress value={progress.value} label={progress.label} />}
@@ -223,7 +235,9 @@ export default function VerseEditorPage() {
         confirmLabel="Delete"
         message="Its audio and video files are moved to the Drive trash. Learners' past submissions are kept."
         onConfirm={async () => {
+          await deleteVerseMedia(pid, vid!).catch(() => undefined);
           await deleteDoc(doc(db, 'playlists', pid, 'verses', vid!));
+          await recountVerses(pid);
           toast.success('Verse deleted');
           navigate(`/admin/playlists/${pid}`);
         }}

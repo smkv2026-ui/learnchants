@@ -1,12 +1,10 @@
-import { api } from './api';
-import { useAuth } from '@/stores/auth';
+import { ensureProfile } from './ops/profile';
 
-/** Ensure the default USER role claim and profile doc exist after sign-in. */
+/** Ensure the learner profile doc exists after sign-in (best effort when offline). */
 export async function completeSignIn(displayName?: string): Promise<void> {
   try {
-    const res = await api.initProfile(displayName ? { displayName } : {});
-    if (res.refreshToken) await useAuth.getState().refreshClaims();
+    await ensureProfile(displayName);
   } catch {
-    /* offline or functions unavailable: role defaults to USER client-side */
+    /* offline: retried on next sign-in */
   }
 }

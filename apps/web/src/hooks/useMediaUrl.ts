@@ -1,14 +1,14 @@
 import { useQuery } from '@tanstack/react-query';
-import { api } from '@/lib/api';
+import { resolveMedia } from '@/lib/media';
 
-/** Short-lived signed streaming URL for a media id (never a Drive link). */
+/** Playable URL for a media id (Drive link or an object URL assembled from Firestore chunks). */
 export function useMediaUrl(mediaId: string | null | undefined, enabled = true) {
   return useQuery({
     queryKey: ['media-url', mediaId],
-    queryFn: () => api.getMediaUrl({ mediaId: mediaId! }),
+    queryFn: () => resolveMedia(mediaId!),
     enabled: !!mediaId && enabled,
-    staleTime: 10 * 60 * 1000,
-    gcTime: 12 * 60 * 1000,
-    retry: (count, err) => count < 2 && !String((err as Error).message).match(/locked|denied|permission/i),
+    staleTime: Infinity,
+    gcTime: 30 * 60 * 1000,
+    retry: (count, err) => count < 2 && !(err as { locked?: boolean }).locked,
   });
 }

@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { collection } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { api, errorMessage } from '@/lib/api';
+import { errorMessage } from '@/lib/errors';
+import { createAdminInvite, removeAdmin, setAdminActive } from '@/lib/ops/admins';
 import { timeAgo } from '@/lib/format';
 import type { AdminUser, WithId } from '@/lib/types';
 import { useAuth } from '@/stores/auth';
@@ -23,7 +24,7 @@ export default function AdminsPage() {
   const invite = async () => {
     setBusy(true);
     try {
-      setLink(await api.createAdminInvite(email.trim() ? { email: email.trim() } : {}));
+      setLink(await createAdminInvite(email.trim() || undefined));
     } catch (err) {
       toast.error(errorMessage(err));
     } finally {
@@ -33,7 +34,7 @@ export default function AdminsPage() {
 
   const toggle = async (a: WithId<AdminUser>) => {
     try {
-      await api.deactivateAdmin({ uid: a.id, active: a.status !== 'active' });
+      await setAdminActive(a.id, a.status !== 'active');
       toast.success(a.status === 'active' ? 'Admin deactivated' : 'Admin reactivated');
     } catch (err) {
       toast.error(errorMessage(err));
@@ -106,7 +107,7 @@ export default function AdminsPage() {
         onConfirm={async () => {
           if (!removing) return;
           try {
-            await api.removeAdmin({ uid: removing.id });
+            await removeAdmin(removing.id);
             toast.success('Admin removed');
           } catch (err) {
             toast.error(errorMessage(err));

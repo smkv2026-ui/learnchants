@@ -2,12 +2,7 @@
   "hosting": {
     "public": "apps/web/dist",
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
-    "rewrites": [
-      { "source": "/media/**", "function": { "functionId": "stream_media", "region": "us-central1" } },
-      { "source": "/drive/callback", "function": { "functionId": "drive_oauth_callback", "region": "us-central1" } },
-      { "source": "/mock-upload/**", "function": { "functionId": "mock_upload", "region": "us-central1" } },
-      { "source": "**", "destination": "/index.html" }
-    ],
+    "rewrites": [{ "source": "**", "destination": "/index.html" }],
     "headers": [
       {
         "source": "/sw.js",
@@ -27,27 +22,14 @@
       }
     ]
   },
-  "functions": [
-    {
-      "source": "functions",
-      "codebase": "default",
-      "runtime": "python312",
-      "ignore": ["venv", ".venv", "tests", "__pycache__", ".pytest_cache", "*.local", ".env.example", "requirements-dev.txt"]
-    }
-  ],
   "firestore": {
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
   },
-  "storage": {
-    "rules": "storage.rules"
-  },
   "emulators": {
     "singleProjectMode": true,
     "auth": { "port": 9099 },
-    "functions": { "port": 5001 },
     "firestore": { "port": 8080 },
-    "storage": { "port": 9199 },
     "hosting": { "port": 5000 },
     "ui": { "enabled": true, "port": 4000 }
   }
