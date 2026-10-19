@@ -86,7 +86,12 @@ pnpm install --frozen-lockfile
 pnpm --filter web build
 
 echo "▶ Deploying (Hosting + Firestore rules/indexes)"
-$FB deploy --only hosting,firestore
+# Hosting uploads sometimes fail on flaky connections; a retry only re-sends missing files.
+for attempt in 1 2 3; do
+  if $FB deploy --only hosting,firestore; then break; fi
+  [[ $attempt == 3 ]] && { echo "Deploy failed 3 times; re-run: firebase deploy --only hosting,firestore --project $PROJECT" >&2; exit 1; }
+  echo "  deploy failed (attempt $attempt/3), retrying in 15s…"; sleep 15
+done
 
 cat <<EOF
 
