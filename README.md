@@ -98,6 +98,7 @@ pnpm dev:emu                         # terminal 3: http://localhost:5173
 - Learner recordings use 64 kbps audio / 360p 350 kbps video to fit built-in storage.
 
 ## 7. Troubleshooting
+- *Hosting upload “retries exhausted”*: lower parallel uploads and re-run: `FIREBASE_HOSTING_UPLOAD_CONCURRENCY=2 firebase deploy --only hosting,firestore` (deploy.sh already uses 4).
 - *“You don’t have permission to do that”* when becoming admin: sign in with **Google** using exactly the email passed to `deploy.sh`.
 - *“File is too large for built-in storage”*: connect Google Drive (teachers) or record a shorter take.
 - *“The free daily quota has been reached”*: wait until the quota resets (midnight Pacific time) or upgrade to Blaze.

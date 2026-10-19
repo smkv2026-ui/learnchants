@@ -33,6 +33,9 @@ fi
 command -v firebase >/dev/null || npm i -g firebase-tools
 command -v pnpm >/dev/null || npm i -g pnpm@10
 FB="firebase --project $PROJECT"
+# The CLI uploads 200 files in parallel by default, which drops connections on
+# Cloud Shell and slow networks; a handful at a time is reliable.
+export FIREBASE_HOSTING_UPLOAD_CONCURRENCY="${FIREBASE_HOSTING_UPLOAD_CONCURRENCY:-4}"
 
 echo "▶ Firebase login"
 firebase projects:list >/dev/null 2>&1 || firebase login --no-localhost
