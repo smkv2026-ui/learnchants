@@ -68,7 +68,7 @@ let s = ""; process.stdin.on("data", (d) => (s += d)).on("end", () => {
 
 echo "▶ Enabling Firestore APIs (free on the Spark plan)"
 if command -v gcloud >/dev/null; then
-  gcloud services enable firestore.googleapis.com firebaserules.googleapis.com --project "$PROJECT"
+  gcloud services enable firestore.googleapis.com firebaserules.googleapis.com drive.googleapis.com picker.googleapis.com --project "$PROJECT"
 else
   echo "  gcloud not found: enable the Cloud Firestore API at"
   echo "  https://console.developers.google.com/apis/api/firestore.googleapis.com/overview?project=$PROJECT"

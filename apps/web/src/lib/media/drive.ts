@@ -16,12 +16,16 @@ const UPLOAD = 'https://www.googleapis.com/upload/drive/v3';
 const FOLDER = 'application/vnd.google-apps.folder';
 export const DEFAULT_ROOT = 'LearnChants';
 
+/** Browser API key for Drive/Picker: a dedicated key if set, else the Firebase web key. */
+export const googleApiKey = (): string => env.VITE_GOOGLE_API_KEY || env.VITE_FIREBASE_API_KEY || '';
+
+/** Drive works with the Firebase Google sign-in (no separate OAuth client needed); off on the emulators. */
 export function driveConfigured(): boolean {
-  return !!(env.VITE_GOOGLE_CLIENT_ID && env.VITE_GOOGLE_API_KEY);
+  return env.VITE_USE_EMULATORS !== 'true' && !!googleApiKey();
 }
 
 export function publicDriveUrl(fileId: string): string {
-  return `${API}/files/${encodeURIComponent(fileId)}?alt=media&key=${env.VITE_GOOGLE_API_KEY}`;
+  return `${API}/files/${encodeURIComponent(fileId)}?alt=media&key=${googleApiKey()}`;
 }
 
 declare global {
@@ -43,6 +47,42 @@ export function loadScript(src: string): Promise<void> {
   });
 }
 
+const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+
+/**
+ * Drive access token via the same Google sign-in Firebase Auth uses: re-auth (or
+ * link) the signed-in user with the extra ``drive.file`` scope. Needs only the
+ * Drive API enabled in the project.
+ */
+async function firebaseDriveToken(): Promise<{ access_token: string; expires_in: number }> {
+  const { GoogleAuthProvider, linkWithPopup, reauthenticateWithPopup } = await import('firebase/auth');
+  const { auth } = await import('@/lib/firebase');
+  const user = auth.currentUser;
+  if (!user) throw new Error('Please sign in first.');
+  const provider = new GoogleAuthProvider();
+  provider.addScope(DRIVE_SCOPE);
+  provider.setCustomParameters({ prompt: 'consent', ...(user.email ? { login_hint: user.email } : {}) });
+  const hasGoogle = user.providerData.some((p) => p.providerId === 'google.com');
+  const result = hasGoogle ? await reauthenticateWithPopup(user, provider) : await linkWithPopup(user, provider);
+  const accessToken = GoogleAuthProvider.credentialFromResult(result)?.accessToken;
+  if (!accessToken) throw new Error('Google did not grant Drive access. Please allow “See and manage files created by this app”.');
+  return { access_token: accessToken, expires_in: 3300 };
+}
+
+/** Optional dedicated OAuth client (VITE_GOOGLE_CLIENT_ID) via Google Identity Services. */
+async function gisToken(): Promise<{ access_token: string; expires_in: number }> {
+  await loadScript('https://accounts.google.com/gsi/client');
+  return new Promise((resolve, reject) => {
+    const client = window.google.accounts.oauth2.initTokenClient({
+      client_id: env.VITE_GOOGLE_CLIENT_ID,
+      scope: DRIVE_SCOPE,
+      callback: (res: any) => (res.access_token ? resolve(res) : reject(new Error(res.error || 'Drive authorisation cancelled'))),
+      error_callback: (e: any) => reject(new Error(e?.message || 'Drive authorisation cancelled')),
+    });
+    client.requestAccessToken({ prompt: '' });
+  });
+}
+
 interface DriveState {
   token: string | null;
   expiresAt: number;
@@ -58,16 +98,7 @@ export const useDrive = create<DriveState>((set, get) => ({
     const s = get();
     if (s.token && s.expiresAt > Date.now() + 60_000) return s.token;
     if (!driveConfigured()) throw new Error('Google Drive is not configured for this site.');
-    await loadScript('https://accounts.google.com/gsi/client');
-    const token = await new Promise<{ access_token: string; expires_in: number }>((resolve, reject) => {
-      const client = window.google.accounts.oauth2.initTokenClient({
-        client_id: env.VITE_GOOGLE_CLIENT_ID,
-        scope: 'https://www.googleapis.com/auth/drive.file',
-        callback: (res: any) => (res.access_token ? resolve(res) : reject(new Error(res.error || 'Drive authorisation cancelled'))),
-        error_callback: (e: any) => reject(new Error(e?.message || 'Drive authorisation cancelled')),
-      });
-      client.requestAccessToken({ prompt: '' });
-    });
+    const token = env.VITE_GOOGLE_CLIENT_ID ? await gisToken() : await firebaseDriveToken();
     set({ token: token.access_token, expiresAt: Date.now() + token.expires_in * 1000 });
     return token.access_token;
   },

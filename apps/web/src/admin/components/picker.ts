@@ -2,7 +2,7 @@
 // (scope drive.file); picking a folder grants this app access to it.
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { loadScript, useDrive } from '@/lib/media/drive';
+import { googleApiKey, loadScript, useDrive } from '@/lib/media/drive';
 
 const env = import.meta.env;
 
@@ -20,7 +20,7 @@ export async function pickDriveFolder(): Promise<{ id: string; name: string } | 
       .setTitle('Choose where Learn Chants stores media')
       .addView(view)
       .setOAuthToken(accessToken)
-      .setDeveloperKey(env.VITE_GOOGLE_API_KEY)
+      .setDeveloperKey(googleApiKey())
       .setAppId(env.VITE_GOOGLE_APP_ID || '')
       .setCallback((data: any) => {
         if (data.action === g.Action.PICKED) resolve({ id: data.docs[0].id, name: data.docs[0].name });

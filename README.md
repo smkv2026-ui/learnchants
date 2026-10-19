@@ -36,15 +36,10 @@ docs                BRD, build prompt, architecture
 
 Re-run `./scripts/deploy.sh …` after pulling updates.
 
-### Optional: Google Drive (for long videos)
-Built-in storage holds files up to ~8 MB (several minutes of audio, ~2.5 minutes of the app's 360p video). To keep larger teacher videos in your own Drive:
-1. Google Cloud console → same project → *APIs & Services*: enable **Google Drive API** and **Google Picker API**.
-2. *OAuth consent screen*: External, add scope `…/auth/drive.file`, add your teachers as test users (or publish).
-3. *Credentials* → **OAuth client ID** (Web): Authorised JavaScript origin `https://<project-id>.web.app`. No redirect URI is needed.
-4. *Credentials* → **API key**, restricted to the Drive and Picker APIs and your site.
-5. Redeploy: `GOOGLE_CLIENT_ID=… GOOGLE_API_KEY=… GOOGLE_PROJECT_NUMBER=… ./scripts/deploy.sh <project-id> <email>`.
+### Google Drive (one click)
+By default files live in Firestore (up to ~8 MB each). To use your Drive instead, a teacher clicks **Connect Google Drive** (Admin → Settings, the verse editor, or a playlist's Storage tab) and approves "See and manage files created by this app". This reuses the Firebase Google sign-in; the only requirement is that the **Google Drive API** and **Google Picker API** are enabled (`deploy.sh` does this, or: `gcloud services enable drive.googleapis.com picker.googleapis.com --project <project-id>`).
 
-Teachers then click **Connect Google Drive** (Settings, the verse editor, or a playlist's Storage tab). Uploads go to `LearnChants/<Playlist>/<Section>/…/<Verse>/audio|video`, shared "anyone with the link" so learners can stream them; reviewed learner recordings are archived to `<Playlist>/_Learners/<Name>_<uid>/<Verse>/` to free Firestore space.
+New teacher uploads then go to `LearnChants/<Playlist>/<Section>/…/<Verse>/audio|video` in that teacher's Drive (shared by link so learners can stream them), and reviewed learner recordings are archived to `<Playlist>/_Learners/<Name>_<uid>/<Verse>/`. The connection lasts for the browser session (about an hour); click the button again when asked.
 
 ## 2. Run locally (emulators, no Google account needed)
 
