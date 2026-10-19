@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Learn Chants</title>
+    <meta name="description" content="Learn Vedic and devotional chants verse by verse. Listen, chant, and receive guidance from your teacher." />
+    <meta name="theme-color" content="#4a0d1c" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Noto+Sans+Devanagari:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Tiro+Devanagari+Sanskrit&display=swap"
+    />
+    <script>
+      try {
+        var t = localStorage.getItem('lc-theme');
+        if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+        else if (window.matchMedia('(prefers-color-scheme: light)').matches) document.documentElement.dataset.theme = 'light';
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <noscript>Learn Chants needs JavaScript enabled.</noscript>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,24 @@
+rules_version = '2';
+
+// Firebase Storage is used ONLY for small public playlist cover images.
+// All chant media lives in Google Drive behind Cloud Functions.
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isAdmin() {
+      return request.auth != null
+        && request.auth.token.get('role', 'USER') in ['ADMIN', 'SUPER_ADMIN'];
+    }
+
+    match /covers/{playlistId}/{fileName} {
+      allow read: if true;
+      allow write: if isAdmin()
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow delete: if isAdmin();
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
