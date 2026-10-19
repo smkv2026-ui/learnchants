@@ -20,7 +20,25 @@ export default function LearnersPage() {
       ) : filtered.length === 0 ? (
         <EmptyState title="No learners found" />
       ) : (
-        <div className="glass overflow-x-auto rounded-3xl">
+        <>
+        <ul className="space-y-2.5 md:hidden">
+          {filtered.map((r) => (
+            <li key={r.id}>
+              <Link to={`/admin/learners/${r.id}`} className="glass flex items-center gap-3 rounded-2xl p-3.5 transition active:scale-[.99]">
+                <ProgressRing value={pct(r.stats.approved, r.stats.total)} size={48} stroke={4} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-semibold">{r.displayName ?? 'Learner'}</p>
+                  <p className="truncate text-xs text-muted">{r.email}</p>
+                  <p className="mt-0.5 text-xs text-muted">
+                    <span className="num font-semibold text-ink">{r.stats.approved}/{r.stats.total}</span> approved · {r.stats.playlists} playlists · {r.stats.last ? timeAgo(r.stats.last) : `joined ${timeAgo(r.createdAt)}`}
+                  </p>
+                </div>
+                <Icon name="chevron-right" className="shrink-0 text-muted" />
+              </Link>
+            </li>
+          ))}
+        </ul>
+        <div className="glass hidden overflow-x-auto rounded-3xl md:block">
           <table className="w-full min-w-[640px] text-left text-sm">
             <thead className="border-b hairline text-xs uppercase tracking-wider text-muted">
               <tr>
@@ -53,6 +71,7 @@ export default function LearnersPage() {
             </tbody>
           </table>
         </div>
+        </>
       )}
     </>
   );

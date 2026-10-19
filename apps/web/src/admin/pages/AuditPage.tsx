@@ -16,7 +16,22 @@ export default function AuditPage() {
       ) : logs.data.length === 0 ? (
         <EmptyState art="scroll" title="No admin actions yet" />
       ) : (
-        <div className="glass overflow-x-auto rounded-3xl">
+        <>
+        <ul className="space-y-2 md:hidden">
+          {logs.data.map((l) => (
+            <li key={l.id} className="glass rounded-2xl p-3 text-sm">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-mono text-xs font-semibold text-primary">{l.action}</span>
+                <span className="text-xs text-muted">{timeAgo(l.createdAt)}</span>
+              </div>
+              <p className="mt-1 truncate">{l.actorEmail ?? l.actorUid}</p>
+              {l.target && Object.keys(l.target).length > 0 && (
+                <p className="mt-0.5 break-all font-mono text-[11px] text-muted">{Object.entries(l.target).map(([k, v]) => `${k}=${String(v)}`).join(' ')}</p>
+              )}
+            </li>
+          ))}
+        </ul>
+        <div className="glass hidden overflow-x-auto rounded-3xl md:block">
           <table className="w-full min-w-[640px] text-left text-sm">
             <thead className="border-b hairline text-xs uppercase tracking-wider text-muted">
               <tr>
@@ -38,6 +53,7 @@ export default function AuditPage() {
             </tbody>
           </table>
         </div>
+        </>
       )}
     </>
   );

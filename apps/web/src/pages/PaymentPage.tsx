@@ -101,7 +101,7 @@ export default function PaymentPage() {
           ) : (
             <>
               <p className="text-sm uppercase tracking-[.25em] text-muted">Amount</p>
-              <p className="text-gold-gradient font-display text-6xl font-bold">{formatInr(amount)}</p>
+              <p className="text-gold-gradient num text-5xl font-bold sm:text-6xl">{formatInr(amount)}</p>
               <div className="mx-auto my-6 w-fit rounded-3xl bg-white p-4 shadow-glow">
                 <QRCodeSVG value={link} size={196} level="M" fgColor="#2e0e1a" aria-label="UPI payment QR code" />
               </div>

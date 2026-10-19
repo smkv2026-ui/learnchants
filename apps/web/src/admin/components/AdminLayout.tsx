@@ -79,6 +79,10 @@ const NAV: { to: string; label: string; icon: IconName; badge?: 'reviews' | 'pay
   { to: '/admin/audit', label: 'Audit log', icon: 'clock' },
 ];
 
+const MOBILE_NAV = NAV.filter((n) => ['/admin', '/admin/reviews', '/admin/payments', '/admin/playlists'].includes(n.to)).map((n) =>
+  n.to === '/admin' ? { ...n, label: 'Home' } : n,
+);
+
 export function AdminLayout({ children }: { children: ReactNode }) {
   const { user, role, logout } = useAuth();
   const { theme, toggleTheme } = useUi();
@@ -143,8 +147,35 @@ export function AdminLayout({ children }: { children: ReactNode }) {
           <Logo size={28} />
         </header>
         <DriveBanner />
-        <main id="main" className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-10">{children}</main>
+        <main id="main" className="mx-auto max-w-7xl px-4 pb-28 pt-5 sm:px-6 lg:px-10 lg:py-6">{children}</main>
       </div>
+
+      {/* Phone bottom navigation: the four daily tasks plus the full menu. */}
+      <nav aria-label="Admin quick" className="glass fixed inset-x-0 bottom-0 z-30 rounded-none border-x-0 border-b-0 safe-bottom lg:hidden">
+        <ul className="mx-auto grid max-w-md grid-cols-5">
+          {MOBILE_NAV.map((n) => (
+            <li key={n.to}>
+              <NavLink
+                to={n.to}
+                end={n.to === '/admin'}
+                className={({ isActive }) => cn('relative flex min-h-[60px] flex-col items-center justify-center gap-1 text-[11px] font-medium', isActive ? 'text-primary' : 'text-muted')}
+              >
+                <Icon name={n.icon} size={22} />
+                {n.label}
+                {n.badge && counts[n.badge] > 0 && (
+                  <span className="absolute right-[18%] top-1.5 min-w-[18px] rounded-full bg-danger px-1 text-center text-[10px] font-bold leading-[18px] text-white">{counts[n.badge]}</span>
+                )}
+              </NavLink>
+            </li>
+          ))}
+          <li>
+            <button onClick={() => setOpen(true)} className="flex min-h-[60px] w-full flex-col items-center justify-center gap-1 text-[11px] font-medium text-muted">
+              <Icon name="menu" size={22} />
+              More
+            </button>
+          </li>
+        </ul>
+      </nav>
 
       <AnimatePresence>
         {open && (
@@ -173,9 +204,9 @@ export function AdminLayout({ children }: { children: ReactNode }) {
 
 export function AdminHeader({ title, subtitle, actions }: { title: ReactNode; subtitle?: ReactNode; actions?: ReactNode }) {
   return (
-    <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+    <div className="mb-5 flex flex-wrap items-end justify-between gap-3 sm:mb-6 sm:gap-4">
       <div>
-        <h1 className="text-4xl font-semibold">{title}</h1>
+        <h1 className="text-3xl font-semibold sm:text-4xl">{title}</h1>
         {subtitle && <p className="mt-1 text-muted">{subtitle}</p>}
       </div>
       {actions && <div className="flex flex-wrap gap-2">{actions}</div>}

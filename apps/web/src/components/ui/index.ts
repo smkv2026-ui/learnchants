@@ -10,6 +10,7 @@ export { Modal } from './Modal';
 export { ProgressBar, ProgressRing } from './ProgressRing';
 export { CardSkeleton, ListSkeleton, Skeleton } from './Skeleton';
 export { Spinner } from './Spinner';
+export { StatTile } from './StatTile';
 export { StatusChip, type VerseState } from './StatusChip';
 export { Tabs, type TabItem } from './Tabs';
 export { Toaster } from './Toast';

@@ -51,6 +51,10 @@
     -webkit-tap-highlight-color: transparent;
     text-rendering: optimizeLegibility;
   }
+  html,
+  body {
+    overflow-x: clip;
+  }
   body {
     @apply min-h-screen bg-bg font-sans text-ink antialiased;
     background-image: theme('backgroundImage.devotional');
@@ -122,6 +126,13 @@
   .mandala-bg {
     position: relative;
     isolation: isolate;
+    overflow: hidden;
+  }
+  /* Figures for counters/stats: the display serif renders 1 and 0 like I and O. */
+  .num {
+    font-family: theme('fontFamily.sans');
+    font-variant-numeric: lining-nums tabular-nums;
+    letter-spacing: -0.02em;
   }
   .mandala-bg::before {
     content: '';

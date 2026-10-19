@@ -185,7 +185,7 @@ export function Recorder({ kind, rounds, maxSeconds = 600, confirmLabel = 'Use t
       <AnimatePresence>
         {phase === 'countdown' && (
           <motion.div key={count} initial={{ scale: 1.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ opacity: 0 }} className="py-8 text-center">
-            <span className="text-gold-gradient font-display text-7xl font-bold">{count}</span>
+            <span className="text-gold-gradient num text-7xl font-bold">{count}</span>
             <p className="mt-2 text-sm text-muted">Get ready…</p>
           </motion.div>
         )}
@@ -199,7 +199,7 @@ export function Recorder({ kind, rounds, maxSeconds = 600, confirmLabel = 'Use t
           {rounds && (
             <div className="text-center" aria-live="polite">
               <p className="text-xs uppercase tracking-[.25em] text-muted">Round</p>
-              <p className="font-display text-5xl font-bold">
+              <p className="num text-5xl font-bold">
                 <span className="text-gold-gradient">{round}</span>
                 <span className="text-2xl text-muted"> / {rounds}</span>
               </p>

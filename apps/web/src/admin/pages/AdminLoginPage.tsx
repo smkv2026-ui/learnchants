@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { signInWithEmailAndPassword, signInWithPopup, signOut } from 'firebase/auth';
 import { auth, googleProvider } from '@/lib/firebase';
 import { errorMessage } from '@/lib/api';
+import { completeSignIn } from '@/lib/session';
 import { isAdminRole, useAuth } from '@/stores/auth';
 import { Button, Card, TextField } from '@/components/ui';
 import { Logo } from '@/components/layout/Logo';
@@ -23,7 +24,9 @@ export default function AdminLoginPage() {
   }, [user, role, navigate, next]);
 
   const finish = async () => {
-    // Claims are checked server-side everywhere; this only improves the UX.
+    // Ensures the profile/role claim exists (and performs the one-time owner
+    // bootstrap). Claims are checked server-side everywhere; this only improves UX.
+    await completeSignIn();
     const r = await useAuth.getState().refreshClaims();
     if (!isAdminRole(r)) {
       await signOut(auth);

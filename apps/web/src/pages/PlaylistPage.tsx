@@ -190,7 +190,7 @@ export default function PlaylistPage() {
                     const state: VerseState = !open ? 'LOCKED' : (statusMap.get(v.id) as VerseState) ?? 'NOT_STARTED';
                     const inner = (
                       <>
-                        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-gold-sheen font-display text-lg font-bold text-maroon-900">
+                        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-gold-sheen num text-base font-bold text-maroon-900">
                           {i + 1}
                         </span>
                         <div className="min-w-0 flex-1">

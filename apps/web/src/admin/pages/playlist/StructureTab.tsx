@@ -9,6 +9,7 @@ import type { NodeDoc, Verse, WithId } from '@/lib/types';
 import { toast } from '@/stores/ui';
 import { useNodes, useVerses } from '@/hooks/useLearner';
 import { Badge, Button, Card, EmptyState, Icon, IconButton, ListSkeleton, Modal, TextField, cn } from '@/components/ui';
+import { ActionMenu } from '../../components/ActionMenu';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { SortableList } from '../../components/SortableList';
 
@@ -111,20 +112,29 @@ function NodeItem({ node, ctx, handle }: { node: TreeNode; ctx: Ctx; handle: Rea
             {node.verseCount ?? 0} verses total
           </p>
         </div>
-        <div className="flex shrink-0 items-center">
+        <div className="hidden shrink-0 items-center sm:flex">
           <IconButton icon="plus" label="Add sub-section" size="sm" onClick={() => ctx.onAdd(node.id)} />
-          <Button size="sm" variant="ghost" icon="music" onClick={() => navigate(`/admin/playlists/${ctx.pid}/verses/new?node=${node.id}`)} className="hidden sm:inline-flex">
+          <Button size="sm" variant="ghost" icon="music" onClick={() => navigate(`/admin/playlists/${ctx.pid}/verses/new?node=${node.id}`)}>
             Add verse
           </Button>
-          <IconButton icon="music" label="Add verse" size="sm" className="sm:hidden" onClick={() => navigate(`/admin/playlists/${ctx.pid}/verses/new?node=${node.id}`)} />
           <IconButton icon="external" label="Move to another parent" size="sm" onClick={() => ctx.onMove(node)} />
           <IconButton icon="trash" label="Delete section" size="sm" onClick={() => ctx.onDelete(node)} />
         </div>
+        <ActionMenu
+          className="shrink-0 sm:hidden"
+          label={`Actions for ${node.name}`}
+          actions={[
+            { label: 'Add verse', icon: 'music', onSelect: () => navigate(`/admin/playlists/${ctx.pid}/verses/new?node=${node.id}`) },
+            { label: 'Add sub-section', icon: 'plus', onSelect: () => ctx.onAdd(node.id) },
+            { label: 'Move…', icon: 'external', onSelect: () => ctx.onMove(node) },
+            { label: 'Delete', icon: 'trash', onSelect: () => ctx.onDelete(node), danger: true },
+          ]}
+        />
       </div>
       <AnimatePresence initial={false}>
         {open && (node.children.length > 0 || verseCount > 0) && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-            <div className="space-y-2 py-2 pl-6">
+            <div className="space-y-2 py-2 pl-2 sm:pl-6">
               <NodeList ctx={ctx} items={node.children} />
               <VerseRows ctx={ctx} nodeId={node.id} />
             </div>

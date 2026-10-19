@@ -17,6 +17,7 @@ const paths: Record<string, string> = {
   trash: 'M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3',
   edit: 'M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4',
   grip: 'M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01',
+  more: 'M5 12h.01M12 12h.01M19 12h.01',
   lock: 'M6 11h12v9H6zM8 11V8a4 4 0 0 1 8 0v3',
   unlock: 'M6 11h12v9H6zM8 11V8a4 4 0 0 1 7.5-2',
   sun: 'M12 4V2M12 22v-2M4.9 4.9 3.5 3.5M20.5 20.5l-1.4-1.4M4 12H2M22 12h-2M4.9 19.1l-1.4 1.4M20.5 3.5l-1.4 1.4M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10z',
@@ -70,7 +71,7 @@ export function Icon({ name, size = 20, className, ...rest }: { name: IconName; 
       viewBox="0 0 24 24"
       fill={filled ? 'currentColor' : 'none'}
       stroke="currentColor"
-      strokeWidth={1.8}
+      strokeWidth={name === 'more' || name === 'grip' ? 3 : 1.8}
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"

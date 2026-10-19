@@ -7,23 +7,10 @@ import { pct } from '@/lib/progress';
 import { timeAgo } from '@/lib/format';
 import type { Playlist } from '@/lib/types';
 import { useCollection } from '@/hooks/useFirestore';
-import { Card, Icon, ListSkeleton, ProgressBar, ProgressRing, type IconName } from '@/components/ui';
+import { Card, ListSkeleton, ProgressBar, ProgressRing, StatTile } from '@/components/ui';
 import { AdminHeader } from '../components/AdminLayout';
 import { useLearnerRows, usePendingCounts } from '../hooks';
 
-function Stat({ icon, label, value, to, tone }: { icon: IconName; label: string; value: number; to: string; tone: string }) {
-  return (
-    <Link to={to}>
-      <Card className="flex items-center gap-4 p-5 transition hover:-translate-y-0.5 hover:shadow-glow">
-        <span className={`grid h-12 w-12 place-items-center rounded-2xl ${tone}`}><Icon name={icon} size={22} /></span>
-        <div>
-          <p className="font-display text-4xl font-bold tabular-nums">{value}</p>
-          <p className="text-xs uppercase tracking-wider text-muted">{label}</p>
-        </div>
-      </Card>
-    </Link>
-  );
-}
 
 export default function AdminDashboardPage() {
   const counts = usePendingCounts();
@@ -48,14 +35,14 @@ export default function AdminDashboardPage() {
   return (
     <>
       <AdminHeader title="Dashboard" subtitle="An overview of your learners and what needs your attention." />
-      <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <Stat icon="users" label="Learners" value={rows.length} to="/admin/learners" tone="bg-indigo-400/15 text-indigo-400" />
-        <Stat icon="inbox" label="Pending reviews" value={counts.reviews} to="/admin/reviews" tone="bg-primary/15 text-primary" />
-        <Stat icon="rupee" label="Pending payments" value={counts.payments} to="/admin/payments" tone="bg-accent/15 text-accent" />
-        <Stat icon="list" label="Playlists" value={playlists.data.length} to="/admin/playlists" tone="bg-success/15 text-success" />
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 lg:mb-8 lg:grid-cols-4">
+        <StatTile icon="users" label="Learners" value={rows.length} to="/admin/learners" tone="bg-indigo-400/15 text-indigo-400" />
+        <StatTile icon="inbox" label="Pending reviews" value={counts.reviews} to="/admin/reviews" tone="bg-primary/15 text-primary" />
+        <StatTile icon="rupee" label="Pending payments" value={counts.payments} to="/admin/payments" tone="bg-accent/15 text-accent" />
+        <StatTile icon="list" label="Playlists" value={playlists.data.length} to="/admin/playlists" tone="bg-success/15 text-success" />
       </div>
       <div className="grid gap-6 xl:grid-cols-[3fr_2fr]">
-        <Card className="p-5">
+        <Card className="p-4 sm:p-5">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-2xl font-semibold">Learner progress</h2>
             <Link to="/admin/learners" className="text-sm text-primary">View all</Link>
@@ -81,14 +68,14 @@ export default function AdminDashboardPage() {
             </ul>
           )}
         </Card>
-        <Card className="p-5">
+        <Card className="p-4 sm:p-5">
           <h2 className="mb-4 text-2xl font-semibold">Popular playlists</h2>
           <ul className="space-y-4">
             {popular.map((p) => (
               <li key={p.id}>
-                <div className="mb-1 flex justify-between text-sm">
-                  <Link to={`/admin/playlists/${p.id}`} className="font-medium hover:text-primary">{p.title}</Link>
-                  <span className="text-muted">{p.stats.learners} learners · {pct(p.stats.approved, p.stats.total)}% avg</span>
+                <div className="mb-1 flex flex-wrap items-baseline justify-between gap-x-3 text-sm">
+                  <Link to={`/admin/playlists/${p.id}`} className="min-w-0 truncate font-medium hover:text-primary">{p.title}</Link>
+                  <span className="text-xs text-muted sm:text-sm">{p.stats.learners} learners · {pct(p.stats.approved, p.stats.total)}% avg</span>
                 </div>
                 <ProgressBar value={(p.stats.learners / maxLearners) * 100} />
               </li>

@@ -202,7 +202,7 @@ export function LoopPlayer({ audioMediaId, videoMediaId, loops = LOOP_COUNT, aut
           {/* Loop counter */}
           <div className="mb-3 flex flex-col items-center" aria-live="polite">
             <p className="text-xs uppercase tracking-[.25em] text-muted">Listening</p>
-            <div className="mt-1 flex items-baseline gap-1 font-display">
+            <div className="num mt-1 flex items-baseline gap-1">
               <AnimatePresence mode="popLayout">
                 <motion.span
                   key={state.current}
