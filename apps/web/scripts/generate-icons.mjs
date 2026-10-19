@@ -1,13 +1,15 @@
-// Renders the PWA icons from public/favicon.svg (run: pnpm icons).
-import { mkdir, readFile } from 'node:fs/promises';
+// Renders the logo, favicon and PWA icons from scripts/logo-source.webp (run: pnpm icons).
+import { mkdir } from 'node:fs/promises';
 import sharp from 'sharp';
 
-const svg = await readFile(new URL('../public/favicon.svg', import.meta.url));
-const maskable = await readFile(new URL('../public/maskable.svg', import.meta.url));
-await mkdir(new URL('../public/icons/', import.meta.url), { recursive: true });
+const src = new URL('./logo-source.webp', import.meta.url).pathname;
 const out = (p) => new URL(`../public/${p}`, import.meta.url).pathname;
-await sharp(svg, { density: 512 }).resize(192, 192).png().toFile(out('icons/icon-192.png'));
-await sharp(svg, { density: 512 }).resize(512, 512).png().toFile(out('icons/icon-512.png'));
-await sharp(maskable, { density: 512 }).resize(512, 512).png().toFile(out('icons/maskable-512.png'));
-await sharp(maskable, { density: 512 }).resize(180, 180).png().toFile(out('apple-touch-icon.png'));
+await mkdir(out('icons'), { recursive: true });
+const sq = (size) => sharp(src).resize(size, size, { fit: 'cover' });
+await sq(256).webp({ quality: 85 }).toFile(out('logo.webp'));
+await sq(64).png().toFile(out('favicon.png'));
+await sq(192).png().toFile(out('icons/icon-192.png'));
+await sq(512).png().toFile(out('icons/icon-512.png'));
+await sq(512).png().toFile(out('icons/maskable-512.png')); // full-bleed art is maskable-safe
+await sq(180).png().toFile(out('apple-touch-icon.png'));
 console.log('icons written');

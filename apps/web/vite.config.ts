@@ -28,7 +28,7 @@ export default defineConfig(() => {
       VitePWA({
         registerType: 'prompt',
         injectRegister: null,
-        includeAssets: ['favicon.svg', 'apple-touch-icon.png', 'mandala.svg'],
+        includeAssets: ['favicon.png', 'logo.webp', 'apple-touch-icon.png', 'mandala.svg'],
         manifest: {
           name: 'Learn Chants',
           short_name: 'Learn Chants',
@@ -49,7 +49,7 @@ export default defineConfig(() => {
         workbox: {
           navigateFallback: '/index.html',
           navigateFallbackDenylist: [/^\/__\//],
-          globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+          globPatterns: ['**/*.{js,css,html,svg,png,webp,woff2}'],
           cleanupOutdatedCaches: true,
           runtimeCaching: [
             {
