@@ -63,9 +63,22 @@ let s = ""; process.stdin.on("data", (d) => (s += d)).on("end", () => {
   ].join("\n"));
 });' > apps/web/.env.production.local
 
+echo "▶ Enabling Firestore APIs (free on the Spark plan)"
+if command -v gcloud >/dev/null; then
+  gcloud services enable firestore.googleapis.com firebaserules.googleapis.com --project "$PROJECT"
+else
+  echo "  gcloud not found: enable the Cloud Firestore API at"
+  echo "  https://console.developers.google.com/apis/api/firestore.googleapis.com/overview?project=$PROJECT"
+fi
+
 echo "▶ Firestore database"
 if ! $FB firestore:databases:get "(default)" >/dev/null 2>&1; then
-  $FB firestore:databases:create "(default)" --location "${FIRESTORE_LOCATION:-asia-south1}"
+  # A freshly enabled API can take a minute to propagate: retry.
+  for attempt in 1 2 3 4 5 6; do
+    if $FB firestore:databases:create "(default)" --location "${FIRESTORE_LOCATION:-asia-south1}"; then break; fi
+    [[ $attempt == 6 ]] && { echo "Could not create the Firestore database; re-run this script in a few minutes." >&2; exit 1; }
+    echo "  waiting for the API to become available (attempt $attempt/6)…"; sleep 20
+  done
 fi
 
 echo "▶ Building"
