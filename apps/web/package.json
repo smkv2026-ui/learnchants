@@ -13,8 +13,8 @@
     "test:watch": "vitest",
     "test:rules": "firebase emulators:exec --only firestore --project demo-learnchants \"vitest run --config vitest.rules.config.ts\"",
     "icons": "node scripts/generate-icons.mjs",
-    "dev:emu": "VITE_USE_EMULATORS=true vite",
-    "build:emu": "VITE_USE_EMULATORS=true tsc -b && VITE_USE_EMULATORS=true vite build"
+    "dev:emu": "vite --mode emulator",
+    "build:emu": "tsc -b && vite build --mode emulator"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

@@ -27,8 +27,9 @@ docs                BRD, build prompt, architecture
    ```bash
    git clone https://github.com/smkv2026-ui/learnchants.git && cd learnchants
    git checkout claude/magical-lovelace-3nl88m
-   ./scripts/deploy.sh <your-project-id> <your-google-email>
+   ./scripts/deploy.sh <your-google-email>      # project learnchants-55af5 (from .firebaserc)
    ```
+   For a different project: `./scripts/deploy.sh <project-id> <your-google-email>`.
    It writes your email into the rules, creates the Firestore database (region `asia-south1`; override with `FIRESTORE_LOCATION=…`), builds and deploys, then prints **`https://<project-id>.web.app`**.
 4. **Become Super Admin**: open `https://<project-id>.web.app/admin/login` and click **Sign in with Google** with that email. (Only a *verified* sign-in with that exact email can claim Super Admin; email/password accounts are not verified, so use Google.)
 5. Create playlists, sections and verses; invite other teachers from **Admins → Invite admin**.

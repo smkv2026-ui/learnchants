@@ -1,5 +1,6 @@
 {
   "projects": {
-    "default": "demo-learnchants"
+    "default": "learnchants-55af5",
+    "demo": "demo-learnchants"
   }
 }

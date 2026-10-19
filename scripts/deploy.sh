@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # One-command deploy of Learn Chants to a FREE (Spark) Firebase project.
 #
+#   ./scripts/deploy.sh <your-google-email>                 (project from .firebaserc)
 #   ./scripts/deploy.sh <project-id> <your-google-email>
 #
 # Works in Google Cloud Shell (https://shell.cloud.google.com) or any machine with
@@ -13,14 +14,22 @@
 #   GOOGLE_CLIENT_ID, GOOGLE_API_KEY, GOOGLE_PROJECT_NUMBER, FIRESTORE_LOCATION (default asia-south1)
 set -euo pipefail
 
-PROJECT="${1:-}"
-OWNER_EMAIL="$(printf '%s' "${2:-}" | tr '[:upper:]' '[:lower:]')"
-if [[ -z "$PROJECT" || -z "$OWNER_EMAIL" || "$OWNER_EMAIL" != *@* ]]; then
-  echo "usage: $0 <firebase-project-id> <your-google-email>" >&2
-  exit 1
-fi
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
+# Accept "<email>" (project from .firebaserc) or "<project-id> <email>".
+if [[ "${1:-}" == *@* ]]; then
+  OWNER_EMAIL="$1"
+  PROJECT="$(node -e 'console.log(JSON.parse(require("fs").readFileSync(".firebaserc","utf8")).projects.default)')"
+else
+  PROJECT="${1:-}"
+  OWNER_EMAIL="${2:-}"
+fi
+OWNER_EMAIL="$(printf '%s' "$OWNER_EMAIL" | tr '[:upper:]' '[:lower:]')"
+if [[ -z "$PROJECT" || -z "$OWNER_EMAIL" || "$OWNER_EMAIL" != *@* ]]; then
+  echo "usage: $0 <your-google-email>   (project from .firebaserc)" >&2
+  echo "   or: $0 <firebase-project-id> <your-google-email>" >&2
+  exit 1
+fi
 command -v firebase >/dev/null || npm i -g firebase-tools
 command -v pnpm >/dev/null || npm i -g pnpm@10
 FB="firebase --project $PROJECT"
