@@ -1,0 +1,238 @@
+rules_version = '2';
+
+// Learn Chants Firestore Security Rules
+//
+// Principles:
+//  * Roles come from the `role` custom claim (set only by Cloud Functions).
+//    Admin access additionally requires an active `adminUsers/{uid}` record, so
+//    a deactivated admin loses access immediately even with an old ID token.
+//  * Learner-readable documents never contain admin identity or Drive ids.
+//    Admin-only collections (adminPlaylists, adminUsers, adminSettings,
+//    auditLogs) and functions-only collections (driveFiles, driveFolders,
+//    driveConnections, adminInvites) are denied to learners.
+//  * Trusted state (grants, payments, submissions, replies, progress) is
+//    written only by Cloud Functions (Admin SDK bypasses these rules).
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------------------------------------------------------------- helpers
+    function signedIn() {
+      return request.auth != null;
+    }
+    function claimRole() {
+      return signedIn() ? request.auth.token.get('role', 'USER') : 'ANON';
+    }
+    function adminDoc() {
+      return /databases/$(database)/documents/adminUsers/$(request.auth.uid);
+    }
+    function isAdmin() {
+      return claimRole() in ['ADMIN', 'SUPER_ADMIN']
+        && exists(adminDoc())
+        && get(adminDoc()).data.status == 'active';
+    }
+    function isSuperAdmin() {
+      return claimRole() == 'SUPER_ADMIN' && isAdmin();
+    }
+    function isSelf(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+    function playlistDoc(pid) {
+      return /databases/$(database)/documents/playlists/$(pid);
+    }
+    function isPublished(pid) {
+      return exists(playlistDoc(pid)) && get(playlistDoc(pid)).data.published == true;
+    }
+    function canReadContent(pid) {
+      return isAdmin() || isPublished(pid);
+    }
+    // Fields that would leak admin identity or storage internals must never be
+    // written into learner-readable content documents.
+    function noIdentityFields() {
+      return !request.resource.data.keys().hasAny([
+        'ownerUid', 'createdBy', 'authorUid', 'adminUid', 'reviewedBy',
+        'driveFileId', 'folderId', 'driveFolderId', 'storageFolderId', 'email'
+      ]);
+    }
+    function onlyKeys(keys) {
+      return request.resource.data.keys().hasOnly(keys);
+    }
+    function changedOnly(keys) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
+    }
+
+    // ------------------------------------------------------------------ users
+    match /users/{uid} {
+      allow read: if isSelf(uid) || isAdmin();
+      allow create: if isSelf(uid)
+        && onlyKeys(['displayName', 'email', 'createdAt', 'prefs'])
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() <= 80;
+      allow update: if isSelf(uid)
+        && changedOnly(['displayName', 'prefs'])
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() <= 80;
+      allow delete: if false;
+
+      match /progress/{pid} {
+        allow read: if isSelf(uid) || isAdmin();
+        allow write: if false;
+
+        match /verseStatus/{vid} {
+          allow read: if isSelf(uid) || isAdmin();
+          allow write: if false;
+        }
+      }
+
+      match /notifications/{nid} {
+        allow read, delete: if isSelf(uid);
+        allow update: if isSelf(uid) && changedOnly(['read']) && request.resource.data.read is bool;
+        allow create: if false;
+      }
+
+      match /meta/{doc} {
+        allow read: if isSelf(uid) || isAdmin();
+        allow write: if false;
+      }
+    }
+
+    // Admin dashboards query progress across learners.
+    match /{path=**}/progress/{pid} {
+      allow read: if isAdmin();
+    }
+    match /{path=**}/verseStatus/{vid} {
+      allow read: if isAdmin();
+    }
+
+    // -------------------------------------------------------- public content
+    match /playlists/{pid} {
+      allow get: if isAdmin() || resource.data.published == true;
+      // Learner list queries must filter on published == true.
+      allow list: if isAdmin() || resource.data.published == true;
+      allow create: if isAdmin() && noIdentityFields()
+        && onlyKeys(['title', 'titleNative', 'description', 'coverUrl', 'access', 'price',
+                     'published', 'sequentialUnlock', 'order', 'verseCount', 'createdAt', 'updatedAt'])
+        && request.resource.data.title is string
+        && request.resource.data.access in ['free', 'paid'];
+      allow update: if isAdmin() && noIdentityFields()
+        && onlyKeys(['title', 'titleNative', 'description', 'coverUrl', 'access', 'price',
+                     'published', 'sequentialUnlock', 'order', 'verseCount', 'createdAt', 'updatedAt'])
+        && request.resource.data.access in ['free', 'paid'];
+      allow delete: if isAdmin();
+
+      // UPI details are needed by payers; the payee name is inherently visible
+      // (admins are advised to use a neutral organisation/trust UPI ID).
+      match /payment/{doc} {
+        allow read: if signedIn() && canReadContent(pid);
+        allow create, update: if isAdmin() && doc == 'info' && onlyKeys(['upiId', 'payeeName']);
+        allow delete: if isAdmin();
+      }
+
+      match /nodes/{nid} {
+        allow read: if canReadContent(pid);
+        allow create, update: if isAdmin() && noIdentityFields()
+          && onlyKeys(['parentId', 'name', 'description', 'order', 'verseCount', 'createdAt', 'updatedAt'])
+          && request.resource.data.name is string;
+        allow delete: if isAdmin();
+      }
+
+      match /verses/{vid} {
+        allow read: if canReadContent(pid);
+        allow create, update: if isAdmin() && noIdentityFields()
+          && request.resource.data.name is string
+          // media pointers are maintained by finalize_upload only
+          && (request.method == 'create'
+                ? !request.resource.data.keys().hasAny(['audioMediaId', 'videoMediaId'])
+                : !request.resource.data.diff(resource.data).affectedKeys()
+                    .hasAny(['audioMediaId', 'videoMediaId', 'hasAudio', 'hasVideo']));
+        allow delete: if isAdmin();
+
+        match /media/{mid} {
+          allow read: if canReadContent(pid);
+          allow write: if false;
+        }
+      }
+
+      match /materials/{mid} {
+        allow read: if canReadContent(pid);
+        allow create, update: if isAdmin() && noIdentityFields()
+          && request.resource.data.title is string
+          && request.resource.data.type in ['pdf', 'scripture', 'text']
+          && (request.method == 'create'
+                ? !request.resource.data.keys().hasAny(['mediaId'])
+                : !request.resource.data.diff(resource.data).affectedKeys().hasAny(['mediaId']));
+        allow delete: if isAdmin();
+      }
+    }
+
+    // ------------------------------------------------------------ admin-only
+    match /adminPlaylists/{pid} {
+      allow read: if isAdmin();
+      allow create: if isAdmin()
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.createdBy == request.auth.uid
+        && onlyKeys(['ownerUid', 'createdBy', 'createdAt']);
+      allow update: if false; // storage overrides are set by set_storage_location
+      allow delete: if isAdmin() && (resource.data.ownerUid == request.auth.uid || isSuperAdmin());
+    }
+
+    match /adminUsers/{uid} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /adminSettings/{uid} {
+      allow read: if isSelf(uid) && isAdmin();
+      allow create: if isSelf(uid) && isAdmin()
+        && onlyKeys(['displayName', 'upiId', 'payeeName', 'theme']);
+      allow update: if isSelf(uid) && isAdmin()
+        && changedOnly(['displayName', 'upiId', 'payeeName', 'theme']);
+      allow delete: if false;
+    }
+
+    match /auditLogs/{id} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // -------------------------------------------- functions-written, scoped
+    match /accessGrants/{gid} {
+      allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
+      allow write: if false;
+    }
+
+    match /paymentRequests/{id} {
+      allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
+      allow write: if false;
+    }
+
+    match /submissions/{sid} {
+      allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
+      allow write: if false;
+
+      match /replies/{rid} {
+        allow read: if isAdmin()
+          || (signedIn() && get(/databases/$(database)/documents/submissions/$(sid)).data.uid == request.auth.uid);
+        allow write: if false;
+      }
+    }
+
+    // --------------------------------------------------------- functions-only
+    match /driveFiles/{id} {
+      allow read, write: if false;
+    }
+    match /driveFolders/{id} {
+      allow read, write: if false;
+    }
+    match /driveConnections/{uid} {
+      allow read, write: if false;
+    }
+    match /adminInvites/{id} {
+      allow read, write: if false;
+    }
+
+    // Everything else is closed.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
