@@ -29,6 +29,8 @@ class Config:
     google_client_secret: str = ""
     token_encryption_key: str = ""
     media_token_secret: str = ""
+    # The first verified sign-in with this email becomes SUPER_ADMIN, once, while none exists.
+    bootstrap_super_admin_email: str = ""
     media_token_ttl_sec: int = 15 * 60
     oauth_state_ttl_sec: int = 10 * 60
     invite_ttl_sec: int = 7 * 24 * 3600
@@ -36,6 +38,10 @@ class Config:
     max_audio_bytes: int = 50 * 1024 * 1024
     max_video_bytes: int = 500 * 1024 * 1024
     max_doc_bytes: int = 30 * 1024 * 1024
+
+    @property
+    def google_oauth_configured(self) -> bool:
+        return bool(self.google_client_id) and self.google_client_id != "not-configured" and bool(self.google_client_secret)
 
     @property
     def drive_redirect_uri(self) -> str:
@@ -53,4 +59,5 @@ class Config:
             google_client_secret=env.get("GOOGLE_CLIENT_SECRET", ""),
             token_encryption_key=env.get("TOKEN_ENCRYPTION_KEY", ""),
             media_token_secret=env.get("MEDIA_TOKEN_SECRET", ""),
+            bootstrap_super_admin_email=env.get("BOOTSTRAP_SUPER_ADMIN_EMAIL", "").strip().lower(),
         )

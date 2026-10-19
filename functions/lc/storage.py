@@ -235,8 +235,11 @@ def drive_auth_url(deps: Deps, caller: Caller | None, _data: Any = None) -> dict
     caller = require_admin(caller)
     if deps.config.mock_drive:
         return {"mock": True, "url": None}
-    if not deps.config.google_client_id:
-        raise fail(Code.FAILED_PRECONDITION, "Google OAuth is not configured on the server.")
+    if not deps.config.google_oauth_configured:
+        raise fail(
+            Code.FAILED_PRECONDITION,
+            "Google Drive is not configured yet: set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET (see README).",
+        )
     state = sign(
         {"u": caller.uid, "n": secrets.token_hex(8), "exp": time.time() + deps.config.oauth_state_ttl_sec},
         deps.config.media_token_secret,

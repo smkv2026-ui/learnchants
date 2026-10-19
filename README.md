@@ -59,6 +59,22 @@ pnpm dev:emu            # http://localhost:5173
 
 ## 3. Deploy to Firebase (live URL)
 
+> **Free (Spark) vs Blaze.** Firebase's free Spark plan cannot run Cloud Functions at all, and this app needs them for everything that must stay secret or trusted (Drive tokens, signed media links, roles, payments, reviews). The project must be on **Blaze (pay-as-you-go)**, which keeps the same free monthly quotas; a small class typically pays ₹0. Add a card, then set a budget alert (e.g. ₹100) under *Billing → Budgets & alerts*.
+
+### Quickest path: one command in Google Cloud Shell
+1. Create the project, upgrade to Blaze, enable Authentication (Email/Password + Google), create Firestore, click *Get started* on Storage (steps 1-5 below).
+2. Open <https://shell.cloud.google.com>, then:
+   ```bash
+   git clone https://github.com/smkv2026-ui/learnchants.git && cd learnchants
+   git checkout claude/magical-lovelace-3nl88m
+   ./scripts/deploy.sh <project-id> <your-google-email>
+   ```
+   The script writes the web config, generates the encryption/signing secrets, builds and deploys, and prints `https://<project-id>.web.app`.
+3. Open `https://<project-id>.web.app/admin/login` and **Sign in with Google** as that email. Because `BOOTSTRAP_SUPER_ADMIN_EMAIL` is set, that first verified sign-in becomes Super Admin (only while no Super Admin exists).
+4. Drive: until you finish section 3.2 and re-run the script with `GOOGLE_CLIENT_ID=… GOOGLE_CLIENT_SECRET=… GOOGLE_API_KEY=… GOOGLE_PROJECT_NUMBER=… ./scripts/deploy.sh …`, learners can browse, but teachers can't upload media yet ("Google Drive is not configured yet").
+
+The manual steps below describe the same thing in detail.
+
 ### 3.1 Firebase project
 1. Create a project at <https://console.firebase.google.com> and **upgrade it to the Blaze (pay-as-you-go) plan**. Cloud Functions require Blaze; a small app usually stays within the free usage tiers.
 2. **Authentication** → Sign-in method: enable *Email/Password* and *Google*. Add your hosting domain to *Authorized domains* (the `*.web.app` domain is added automatically).

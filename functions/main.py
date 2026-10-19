@@ -29,6 +29,7 @@ MEDIA_TOKEN_SECRET = params.SecretParam("MEDIA_TOKEN_SECRET")
 # Non-secret params come from functions/.env.<project> (see README).
 APP_URL = params.StringParam("APP_URL", default="http://localhost:5173")
 MOCK_DRIVE = params.BoolParam("MOCK_DRIVE", default=False)
+BOOTSTRAP_SUPER_ADMIN_EMAIL = params.StringParam("BOOTSTRAP_SUPER_ADMIN_EMAIL", default="")
 
 DRIVE_SECRETS = [GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, TOKEN_ENCRYPTION_KEY]
 ALL_SECRETS = DRIVE_SECRETS + [MEDIA_TOKEN_SECRET]

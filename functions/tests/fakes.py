@@ -269,6 +269,7 @@ class FakeUser:
     display_name: str | None = None
     custom_claims: dict | None = None
     disabled: bool = False
+    email_verified: bool = True
 
 
 class UserNotFound(Exception):
