@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, deleteDoc, doc, getDocs, serverTimestamp, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
+import { doc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { deleteMedia } from '@/lib/media';
+import { deletePlaylist } from '@/lib/ops/content';
 import { errorMessage } from '@/lib/errors';
 import { isValidUpiId } from '@/lib/upi';
 import type { PaymentInfo, Playlist, WithId } from '@/lib/types';
@@ -84,20 +84,13 @@ export function DetailsTab({ pid, playlist }: { pid: string; playlist: WithId<Pl
   };
 
   const remove = async () => {
-    // Remove stored media (Firestore chunks / Drive files) first, then the content docs.
-    const batch = writeBatch(db);
-    for (const sub of ['verses', 'nodes', 'materials', 'payment']) {
-      const snap = await getDocs(collection(db, 'playlists', pid, sub));
-      for (const d of snap.docs) {
-        for (const key of ['audioMediaId', 'videoMediaId', 'mediaId']) await deleteMedia(d.data()[key]).catch(() => undefined);
-        batch.delete(d.ref);
-      }
+    try {
+      await deletePlaylist(pid);
+      toast.success('Playlist deleted');
+      navigate('/admin/playlists');
+    } catch (err) {
+      toast.error(errorMessage(err));
     }
-    batch.delete(doc(db, 'playlists', pid));
-    await batch.commit();
-    await deleteDoc(doc(db, 'adminPlaylists', pid)).catch(() => undefined);
-    toast.success('Playlist deleted');
-    navigate('/admin/playlists');
   };
 
   return (

@@ -14,7 +14,7 @@ import { PlaylistCard } from '@/components/learner/PlaylistCard';
 
 const STEPS = [
   { icon: 'music' as const, title: 'Listen 3 times', text: 'Each verse loops three times so the sound settles in.' },
-  { icon: 'mic' as const, title: 'Chant 3 times', text: 'Record yourself in three guided rounds.' },
+  { icon: 'mic' as const, title: 'Chant it once', text: 'Record yourself chanting the verse.' },
   { icon: 'send' as const, title: 'Get guidance', text: 'Your teacher replies with corrections and approval.' },
 ];
 

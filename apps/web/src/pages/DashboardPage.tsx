@@ -80,7 +80,7 @@ export default function DashboardPage() {
       {progress.loading ? (
         <ListSkeleton />
       ) : progress.data.length === 0 ? (
-        <EmptyState title="Your journey begins" message="Open a chant, listen three times and record yourself. Your progress will bloom here." action={<Link to="/"><Button icon="sparkles">Find a chant</Button></Link>} />
+        <EmptyState title="Your journey begins" message="Open a chant, listen three times and record yourself once. Your progress will bloom here." action={<Link to="/"><Button icon="sparkles">Find a chant</Button></Link>} />
       ) : (
         <>
           <div className="mb-8 grid gap-4 md:grid-cols-[auto_1fr]">

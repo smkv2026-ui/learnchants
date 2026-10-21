@@ -3,9 +3,10 @@ import { Link, useNavigate } from 'react-router-dom';
 import { collection, doc, orderBy, query, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { errorMessage } from '@/lib/errors';
+import { deletePlaylist } from '@/lib/ops/content';
 import { reorder } from '@/lib/tree';
 import { formatInr } from '@/lib/upi';
-import type { Playlist } from '@/lib/types';
+import type { Playlist, WithId } from '@/lib/types';
 import { useAuth } from '@/stores/auth';
 import { toast } from '@/stores/ui';
 import { useCollection } from '@/hooks/useFirestore';
@@ -13,6 +14,7 @@ import { Badge, Button, EmptyState, Icon, ListSkeleton, Modal, TextField } from 
 import { CoverArt } from '@/components/learner/PlaylistCard';
 import { AdminHeader } from '../components/AdminLayout';
 import { SortableList } from '../components/SortableList';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 
 export default function PlaylistsPage() {
   const uid = useAuth((s) => s.user?.uid);
@@ -21,6 +23,7 @@ export default function PlaylistsPage() {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [busy, setBusy] = useState(false);
+  const [toDelete, setToDelete] = useState<WithId<Playlist> | null>(null);
 
   const create = async () => {
     if (!uid || !title.trim()) return;
@@ -61,6 +64,15 @@ export default function PlaylistsPage() {
     await batch.commit().catch((e) => toast.error(errorMessage(e)));
   };
 
+  const remove = async (p: WithId<Playlist>) => {
+    try {
+      await deletePlaylist(p.id);
+      toast.success(`“${p.title}” deleted`);
+    } catch (err) {
+      toast.error(errorMessage(err));
+    }
+  };
+
   return (
     <>
       <AdminHeader
@@ -94,10 +106,32 @@ export default function PlaylistsPage() {
               <Link to={`/admin/playlists/${p.id}`} aria-label={`Edit ${p.title}`} className="rounded-lg p-2 text-muted hover:bg-ink/5 hover:text-ink">
                 <Icon name="edit" />
               </Link>
+              <button
+                type="button"
+                onClick={() => setToDelete(p)}
+                aria-label={`Delete ${p.title}`}
+                className="rounded-lg p-2 text-muted hover:bg-red-500/10 hover:text-red-500"
+              >
+                <Icon name="trash" />
+              </button>
             </div>
           )}
         />
       )}
+      <ConfirmDialog
+        open={toDelete != null}
+        onClose={() => setToDelete(null)}
+        danger
+        title="Delete playlist?"
+        confirmLabel="Delete forever"
+        message={
+          <>
+            This removes <strong className="text-ink">{toDelete?.title}</strong> with all its sections, verses, materials and their audio/video.
+            Learner recordings and progress are kept. This can't be undone.
+          </>
+        }
+        onConfirm={() => (toDelete ? remove(toDelete) : undefined)}
+      />
       <Modal
         open={open}
         onClose={() => setOpen(false)}

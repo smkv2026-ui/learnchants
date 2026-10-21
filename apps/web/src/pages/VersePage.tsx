@@ -169,7 +169,7 @@ export default function VersePage() {
               <section aria-labelledby="practice-h">
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                   <h2 id="practice-h" className="text-2xl font-semibold">
-                    Your turn <span className="text-base font-normal text-muted">· chant 3 times</span>
+                    Your turn <span className="text-base font-normal text-muted">· chant once</span>
                   </h2>
                   <Tabs
                     items={[
@@ -183,11 +183,11 @@ export default function VersePage() {
                 <AnimatePresence>
                   {listened && (
                     <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mb-3 text-sm text-success">
-                      Great listening! Now record yourself chanting the verse three times.
+                      Great listening! Now record yourself chanting the verse once.
                     </motion.p>
                   )}
                 </AnimatePresence>
-                <Recorder key={`${kind}-${practiceKey}`} kind={kind} rounds={3} confirmLabel="Send to teacher" busy={progress != null} onConfirm={submit} />
+                <Recorder key={`${kind}-${practiceKey}`} kind={kind} hint="Chant the verse once, then tap stop. You can listen back and re-record before sending." confirmLabel="Send to teacher" busy={progress != null} onConfirm={submit} />
                 {progress != null && (
                   <div className="mt-3">
                     <UploadProgress value={progress} label="Sending your recording" />

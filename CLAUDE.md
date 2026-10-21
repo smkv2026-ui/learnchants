@@ -67,7 +67,7 @@ React 18 + TypeScript + Vite (build tooling only), `vite-plugin-pwa` (Workbox), 
 
 ### 5. Learning flow
 - On verse open: loop audio (and video if present) exactly **3 times** with counter, pause/restart, speed. Same in admin preview.
-- Then guided 3-round learner recording, preview, re-record, submit. Progress = approved verses / total; only admin approval counts.
+- Then one learner recording of the verse (single take), preview, re-record, submit. Progress = approved verses / total; only admin approval counts.
 
 ### 6. Recording
 - `MediaRecorder` with feature detection and mime fallback (`audio/webm;codecs=opus` then `audio/mp4`; same for video). Handle permission denial gracefully. Admin verse form offers Record and Attach for audio and video.

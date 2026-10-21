@@ -19,8 +19,10 @@ type Phase = 'idle' | 'countdown' | 'recording' | 'review' | 'error';
 
 interface RecorderProps {
   kind: MediaKind;
-  /** Guided rounds (learners chant 3 times in one take). Omit for a free recording. */
+  /** Guided rounds with a "Next round" counter. Omit for a single free recording. */
   rounds?: number;
+  /** Instruction shown before recording starts. */
+  hint?: string;
   maxSeconds?: number;
   confirmLabel?: string;
   busy?: boolean;
@@ -29,7 +31,7 @@ interface RecorderProps {
 }
 
 /** Browser recorder with live waveform / camera preview, timer, re-record and preview. */
-export function Recorder({ kind, rounds, maxSeconds: maxSecondsProp, confirmLabel = 'Use this recording', busy, onConfirm, onDiscard }: RecorderProps) {
+export function Recorder({ kind, rounds, hint, maxSeconds: maxSecondsProp, confirmLabel = 'Use this recording', busy, onConfirm, onDiscard }: RecorderProps) {
   const [phase, setPhase] = useState<Phase>('idle');
   const [error, setError] = useState('');
   const [elapsed, setElapsed] = useState(0);
@@ -172,9 +174,9 @@ export function Recorder({ kind, rounds, maxSeconds: maxSecondsProp, confirmLabe
       {phase === 'idle' && (
         <div className="flex flex-col items-center gap-4 py-4 text-center">
           <p className="max-w-sm text-sm text-muted">
-            {rounds
+            {hint ?? (rounds
               ? `Chant the verse ${rounds} times in one recording. Tap “Next round” after each repetition.`
-              : `Record ${kind === 'audio' ? 'audio' : 'video'} in your browser.`}
+              : `Record ${kind === 'audio' ? 'audio' : 'video'} in your browser.`)}
           </p>
           <button
             onClick={begin}

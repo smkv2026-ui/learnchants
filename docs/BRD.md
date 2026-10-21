@@ -108,7 +108,7 @@ Rules:
 - FR-U1: Home lists all published playlists (from all admins) with cover, description of meaning, materials, Free/Paid badge, and progress ring if started.
 - FR-U2: Tapping a playlist lets the learner traverse classification levels with breadcrumbs, then verses in sequence.
 - FR-U3: Opening a verse: shows name, meaning, and plays audio (and video if present) **in a loop 3 times** automatically, with a visible counter (1/3, 2/3, 3/3), pause/restart controls, and playback speed.
-- FR-U4: After playback, learner records their own chanting (audio or video) **three times** (guided "Round 1/2/3" or one take containing 3 repetitions — see Open Questions).
+- FR-U4: After playback, learner records their own chanting (audio or video) **once** (single take; owner decision Oct 2026, previously three guided rounds).
 - FR-U5: Learner reviews their recording and submits it to the admin as feedback.
 - FR-U6: Learner receives admin response (corrected feedback: text, audio, or video) and is notified in-app.
 - FR-U7: Sequential unlocking is configurable per playlist: the next verse unlocks when the previous is approved (default: optional, not forced).
@@ -199,7 +199,7 @@ User, Admin(User with role), Playlist, Node (classification, self-referencing tr
 - App installs as PWA and passes Lighthouse PWA checks.
 
 ## 14. Open Questions
-1. Should the learner's "chant thrice" be three separate recordings or one recording with three repetitions? (Default: one recording guided by a 3-round on-screen counter; configurable later.)
+1. Should the learner's "chant thrice" be three separate recordings or one recording with three repetitions? (Default: one recording guided by a 3-round on-screen counter; configurable later.) **Resolved (Oct 2026): a single recording, chanted once.**
 2. Should paid access be one-time or time-limited? (Default: lifetime.)
 3. Should sequential verse unlocking be mandatory? (Default: optional per playlist.)
 4. Hosting: **decided** — Firebase (Hosting, Auth, Firestore, Cloud Functions in Python, no Node.js server). Cloud Functions require the Blaze (pay-as-you-go) plan.

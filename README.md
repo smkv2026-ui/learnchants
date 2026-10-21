@@ -3,7 +3,7 @@
 An installable, offline-capable Progressive Web App for learning Vedic and devotional chants (e.g. Sri Rudram) verse by verse.
 
 - **Teachers (admins)** build a hierarchy (Playlist → sub-playlists → sections → verses), record or attach audio/video for each verse, attach PDFs and notes, and review learner recordings.
-- **Learners** browse playlists, hear each verse **exactly 3 times**, chant it **3 times** in a guided recording, send it to their teacher, and watch their progress grow as verses are approved.
+- **Learners** browse playlists, hear each verse **exactly 3 times**, chant it **once** in a recording, send it to their teacher, and watch their progress grow as verses are approved.
 - Playlists can be **free or paid via UPI** with manual approval.
 
 **This edition runs entirely on Firebase's free Spark plan**: Hosting, Authentication and Cloud Firestore only. There are no Cloud Functions and no Cloud Storage; the Firestore Security Rules are the backend. Media is stored in Firestore (chunked, up to ~8 MB per file), or optionally in the teacher's Google Drive. Teacher anonymity was given up to make this possible (see [Trade-offs](#5-free-plan-trade-offs)). The earlier Blaze-plan version with Python Cloud Functions is in git history (commit `f6dd783`).
@@ -87,7 +87,7 @@ pnpm dev:emu                         # terminal 3: http://localhost:5173
 - Upgrading later to Blaze needs no data migration for content; the Functions-based edition is in git history.
 
 ## 6. Decisions and defaults
-- **Chant thrice** = one recording with an on-screen Round 1/2/3 counter.
+- **Learner recording** = one take of the verse (listen 3×, chant 1×); learners can listen back and re-record before sending.
 - **Paid access** is lifetime until an admin revokes it. **Sequential unlocking** is optional per playlist (UI-enforced).
 - Covers are stored inline as small WebP images (Spark has no Cloud Storage).
 - Learner recordings use 64 kbps audio / 360p 350 kbps video to fit built-in storage.

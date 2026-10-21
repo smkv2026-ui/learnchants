@@ -76,7 +76,6 @@ export default function SubmissionReviewPage() {
           <Card className="p-5">
             <h2 className="mb-3 flex items-center gap-2 text-xl font-semibold"><Icon name="mic" className="text-primary" /> Learner's recording</h2>
             <MediaPlayer mediaId={s.mediaId} kind={s.kind} />
-            <p className="mt-2 text-xs text-muted">The learner chanted the verse three times in this recording.</p>
           </Card>
           {verse.data && (verse.data.hasAudio || verse.data.hasVideo) && (
             <div>
