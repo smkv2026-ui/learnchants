@@ -12,10 +12,12 @@ import { Button, CardSkeleton, EmptyState, ErrorState, Icon } from '@/components
 import { Page } from '@/components/layout/Page';
 import { PlaylistCard } from '@/components/learner/PlaylistCard';
 
-const STEPS = [
-  { icon: 'music' as const, title: 'Listen 3 times', text: 'Each verse loops three times so the sound settles in.' },
-  { icon: 'mic' as const, title: 'Chant it once', text: 'Record yourself chanting the verse.' },
-  { icon: 'send' as const, title: 'Get guidance', text: 'Your teacher replies with corrections and approval.' },
+const YOUTUBE_URL = 'https://youtube.com/@learnchants?si=skIDGO0Lz9KOz2Kl';
+
+const STEPS: { icon: 'music' | 'mic' | 'send'; title: string; text: string; href?: string; linkLabel?: string }[] = [
+  { icon: 'music', title: 'Listen on YouTube', text: 'Learn each chant by listening on our YouTube channel.', href: YOUTUBE_URL, linkLabel: 'Open @learnchants' },
+  { icon: 'mic', title: 'Chant it once', text: 'Record yourself chanting the verse.' },
+  { icon: 'send', title: 'Send for checking', text: 'Send your audio to your teacher for checking and correction.' },
 ];
 
 export function HomePage() {
@@ -82,6 +84,11 @@ export function HomePage() {
               <div>
                 <p className="font-semibold">{s.title}</p>
                 <p className="text-sm text-muted">{s.text}</p>
+                {s.href && (
+                  <a href={s.href} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block text-sm font-semibold text-primary underline-offset-2 hover:underline">
+                    {s.linkLabel} ↗
+                  </a>
+                )}
               </div>
             </motion.div>
           ))}
