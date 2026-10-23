@@ -3,19 +3,20 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { collection, doc, limit, orderBy, query, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { errorMessage } from '@/lib/errors';
-import { reviewSubmission } from '@/lib/ops/review';
+import { deleteReply, deleteSubmission, reviewSubmission } from '@/lib/ops/review';
 import { sanitizeHtml } from '@/lib/sanitize';
 import { timeAgo } from '@/lib/format';
-import type { Reply, Submission, Verse } from '@/lib/types';
+import type { Reply, Submission, Verse, WithId } from '@/lib/types';
 import { toast } from '@/stores/ui';
 import { useCollection, useDoc } from '@/hooks/useFirestore';
-import { Breadcrumbs, Button, Card, EmptyState, Icon, Skeleton, StatusChip, Tabs, TextArea } from '@/components/ui';
+import { Breadcrumbs, Button, Card, EmptyState, Icon, IconButton, Skeleton, StatusChip, Tabs, TextArea } from '@/components/ui';
 import { MediaPlayer } from '@/components/media/MediaPlayer';
 import { MediaInput } from '@/components/media/MediaInput';
 import { LoopPlayer } from '@/components/media/LoopPlayer';
 import type { Recording } from '@/components/media/Recorder';
 import { UploadProgress } from '@/components/media/UploadProgress';
 import { AdminHeader } from '../components/AdminLayout';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 
 export default function SubmissionReviewPage() {
   const { sid } = useParams<{ sid: string }>();
@@ -30,6 +31,8 @@ export default function SubmissionReviewPage() {
   const [rec, setRec] = useState<Recording | null>(null);
   const [progress, setProgress] = useState<number | null>(null);
   const [busy, setBusy] = useState<'APPROVED' | 'NEEDS_WORK' | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [replyToDelete, setReplyToDelete] = useState<WithId<Reply> | null>(null);
 
   if (sub.loading) return <Skeleton className="h-96 w-full rounded-3xl" />;
   if (!s || !sid) return <EmptyState title="Submission not found" action={<Link to="/admin/reviews"><Button>Back to queue</Button></Link>} />;
@@ -76,6 +79,9 @@ export default function SubmissionReviewPage() {
           <Card className="p-5">
             <h2 className="mb-3 flex items-center gap-2 text-xl font-semibold"><Icon name="mic" className="text-primary" /> Learner's recording</h2>
             <MediaPlayer mediaId={s.mediaId} kind={s.kind} />
+            <Button variant="ghost" size="sm" icon="trash" className="mt-3 text-danger" onClick={() => setConfirmDelete(true)}>
+              Delete recording
+            </Button>
           </Card>
           {verse.data && (verse.data.hasAudio || verse.data.hasVideo) && (
             <div>
@@ -97,7 +103,10 @@ export default function SubmissionReviewPage() {
               <ul className="space-y-4">
                 {replies.data.map((r) => (
                   <li key={r.id} className="border-l-2 border-primary/30 pl-3">
-                    <div className="mb-1 flex items-center gap-2 text-xs text-muted"><StatusChip status={r.status} /> {timeAgo(r.createdAt)}</div>
+                    <div className="mb-1 flex items-center gap-2 text-xs text-muted">
+                      <StatusChip status={r.status} /> {timeAgo(r.createdAt)}
+                      <IconButton icon="trash" label="Delete this feedback" size="sm" className="ml-auto" onClick={() => setReplyToDelete(r)} />
+                    </div>
                     {r.text && <p className="whitespace-pre-wrap text-sm">{r.text}</p>}
                     {r.mediaId && <div className="mt-2"><MediaPlayer mediaId={r.mediaId} kind={r.kind} /></div>}
                   </li>
@@ -128,6 +137,40 @@ export default function SubmissionReviewPage() {
           </Card>
         </div>
       </div>
+      <ConfirmDialog
+        open={confirmDelete}
+        onClose={() => setConfirmDelete(false)}
+        danger
+        title="Delete this recording?"
+        confirmLabel="Delete"
+        message="This deletes the learner's recording and all feedback on it. If the verse wasn't approved yet, the learner can record it again."
+        onConfirm={async () => {
+          try {
+            await deleteSubmission({ ...s, id: sid });
+            toast.success('Recording deleted');
+            navigate('/admin/reviews');
+          } catch (err) {
+            toast.error(errorMessage(err));
+          }
+        }}
+      />
+      <ConfirmDialog
+        open={!!replyToDelete}
+        onClose={() => setReplyToDelete(null)}
+        danger
+        title="Delete this feedback?"
+        confirmLabel="Delete"
+        message="The learner will no longer see this reply or its recording."
+        onConfirm={async () => {
+          if (!replyToDelete) return;
+          try {
+            await deleteReply(sid, replyToDelete);
+            toast.success('Feedback deleted');
+          } catch (err) {
+            toast.error(errorMessage(err));
+          }
+        }}
+      />
     </>
   );
 }

@@ -241,6 +241,13 @@ describe('submissions, review and progress', () => {
     await assertSucceeds(updateDoc(doc(as(ADMIN), 'submissions/s1'), { status: 'APPROVED', replyCount: 1 }));
   });
 
+  it('only admins delete submissions and replies', async () => {
+    await assertFails(deleteDoc(doc(as(LEARNER), 'submissions/s1/replies/r1')));
+    await assertFails(deleteDoc(doc(as(LEARNER), 'submissions/s1')));
+    await assertSucceeds(deleteDoc(doc(as(ADMIN), 'submissions/s1/replies/r1')));
+    await assertSucceeds(deleteDoc(doc(as(ADMIN), 'submissions/s1')));
+  });
+
   it('learners read only their own submissions and replies', async () => {
     await assertSucceeds(getDoc(doc(as(LEARNER), 'submissions/s1')));
     await assertFails(getDoc(doc(as(LEARNER), 'submissions/s2')));

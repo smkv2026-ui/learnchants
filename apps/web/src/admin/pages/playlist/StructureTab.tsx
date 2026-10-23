@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { collection, doc, serverTimestamp, updateDoc, writeBatch } from 'firebase/firestore';
+import { collection, deleteDoc, doc, serverTimestamp, updateDoc, writeBatch } from 'firebase/firestore';
 import { AnimatePresence, motion } from 'framer-motion';
 import { auth, db } from '@/lib/firebase';
 import { deleteVerseMedia } from '@/lib/media';
@@ -25,6 +25,7 @@ interface Ctx {
   onAdd: (parentId: string | null) => void;
   onMove: (node: WithId<NodeDoc>) => void;
   onDelete: (node: WithId<NodeDoc>) => void;
+  onDeleteVerse: (verse: WithId<Verse>) => void;
 }
 
 async function saveOrder(pid: string, sub: 'nodes' | 'verses', items: { id: string; order?: number }[], from: string, to: string) {
@@ -91,6 +92,7 @@ function VerseRows({ ctx, nodeId }: { ctx: Ctx; nodeId: string }) {
           </Link>
           {v.hasAudio ? <Badge tone="success">audio</Badge> : <Badge tone="warn">no audio</Badge>}
           {v.hasVideo && <Badge tone="indigo">video</Badge>}
+          <IconButton icon="trash" label={`Delete verse ${v.name}`} size="sm" onClick={() => ctx.onDeleteVerse(v)} />
         </div>
       )}
     />
@@ -171,6 +173,7 @@ export function StructureTab({ pid }: { pid: string }) {
   const [addParent, setAddParent] = useState<string | null | undefined>(undefined);
   const [moving, setMoving] = useState<WithId<NodeDoc> | null>(null);
   const [deleting, setDeleting] = useState<WithId<NodeDoc> | null>(null);
+  const [deletingVerse, setDeletingVerse] = useState<WithId<Verse> | null>(null);
   const [name, setName] = useState('');
   const [bulk, setBulk] = useState({ on: false, prefix: 'Anuvakam', count: '11' });
   const [busy, setBusy] = useState(false);
@@ -228,6 +231,7 @@ export function StructureTab({ pid }: { pid: string }) {
     },
     onMove: setMoving,
     onDelete: setDeleting,
+    onDeleteVerse: setDeletingVerse,
   };
 
   const step1 = nodes.data.length > 0;
@@ -297,6 +301,26 @@ export function StructureTab({ pid }: { pid: string }) {
           </label>
         </form>
       </Modal>
+
+      <ConfirmDialog
+        open={!!deletingVerse}
+        onClose={() => setDeletingVerse(null)}
+        danger
+        title={`Delete “${deletingVerse?.name}”?`}
+        confirmLabel="Delete"
+        message="This deletes the verse with its audio and video."
+        onConfirm={async () => {
+          if (!deletingVerse) return;
+          try {
+            await deleteVerseMedia(pid, deletingVerse.id).catch(() => undefined);
+            await deleteDoc(doc(db, 'playlists', pid, 'verses', deletingVerse.id));
+            await recountVerses(pid).catch(() => undefined);
+            toast.success('Verse deleted');
+          } catch (err) {
+            toast.error(errorMessage(err));
+          }
+        }}
+      />
 
       <MoveDialog pid={pid} node={moving} nodes={nodes.data} onClose={() => setMoving(null)} />
 

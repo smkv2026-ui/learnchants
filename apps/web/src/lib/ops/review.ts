@@ -1,8 +1,8 @@
-import { collection, doc, getDoc, increment, serverTimestamp, writeBatch } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDoc, getDocs, increment, serverTimestamp, updateDoc, writeBatch } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { archiveToDrive, storeMedia } from '@/lib/media';
+import { archiveToDrive, deleteMedia, storeMedia } from '@/lib/media';
 import { driveConnected } from '@/lib/media/drive';
-import type { Submission, WithId } from '@/lib/types';
+import type { Reply, Submission, WithId } from '@/lib/types';
 import { auditInBatch, me, notifyInBatch } from './common';
 
 export const TEACHER_LABEL = 'Your Teacher';
@@ -73,4 +73,29 @@ export async function reviewSubmission(
   // Free Firestore quota: move the reviewed recording into the teacher's Drive.
   if (driveConnected()) await archiveToDrive(sub.mediaId).catch(() => undefined);
   return { celebrate };
+}
+
+/** Admin: delete one teacher reply (and its recording). */
+export async function deleteReply(sid: string, reply: WithId<Reply>): Promise<void> {
+  await deleteMedia(reply.mediaId).catch(() => undefined);
+  await deleteDoc(doc(db, 'submissions', sid, 'replies', reply.id));
+  await updateDoc(doc(db, 'submissions', sid), { replyCount: increment(-1), updatedAt: serverTimestamp() }).catch(() => undefined);
+}
+
+/**
+ * Admin: delete a learner recording with its replies. An approved verse stays
+ * approved; otherwise the verse goes back to "not started" so the learner can record again.
+ */
+export async function deleteSubmission(sub: WithId<Submission>): Promise<void> {
+  const replies = await getDocs(collection(db, 'submissions', sub.id, 'replies'));
+  for (const r of replies.docs) await deleteMedia(r.data().mediaId).catch(() => undefined);
+  await deleteMedia(sub.mediaId).catch(() => undefined);
+  const vsRef = doc(db, 'users', sub.uid, 'progress', sub.pid, 'verseStatus', sub.vid);
+  const vs = await getDoc(vsRef);
+  const batch = writeBatch(db);
+  replies.docs.forEach((r) => batch.delete(r.ref));
+  batch.delete(doc(db, 'submissions', sub.id));
+  if (vs.exists() && vs.data().lastSubmissionId === sub.id && vs.data().status !== 'APPROVED') batch.delete(vsRef);
+  auditInBatch(batch, 'submission.deleted', { submissionId: sub.id, uid: sub.uid, pid: sub.pid, vid: sub.vid });
+  await batch.commit();
 }

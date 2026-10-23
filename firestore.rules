@@ -353,12 +353,13 @@ service cloud.firestore {
       allow update: if isAdmin()
         && changedOnly(['status', 'replyCount', 'updatedAt', 'lastReplyAt'])
         && data().status in ['SUBMITTED', 'NEEDS_WORK', 'APPROVED'];
-      allow delete: if false;
+      allow delete: if isAdmin();
 
       match /replies/{rid} {
         allow read: if isAdmin() || (signedIn() && get(submissionDoc(sid)).data.uid == uid());
         allow create: if isAdmin() && data().authorUid == uid() && data().status in ['APPROVED', 'NEEDS_WORK'];
-        allow update, delete: if false;
+        allow update: if false;
+        allow delete: if isAdmin();
       }
     }
 
