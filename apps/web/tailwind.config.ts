@@ -24,11 +24,13 @@ export default {
         danger: v('danger'),
         warn: v('warn'),
         'on-sheen': v('on-sheen'),
+        heading: v('heading'),
+        chant: v('chant'),
       },
       fontFamily: {
-        sans: ['"Plus Jakarta Sans"', '"Noto Sans Devanagari"', 'system-ui', 'sans-serif'],
-        display: ['"Cormorant Garamond"', '"Tiro Devanagari Sanskrit"', 'Georgia', 'serif'],
-        chant: ['"Tiro Devanagari Sanskrit"', '"Noto Serif Devanagari"', '"Noto Sans Devanagari"', 'serif'],
+        sans: ['"Open Sans"', '"Noto Sans Devanagari"', 'Arial', 'system-ui', 'sans-serif'],
+        display: ['"Open Sans"', '"Noto Sans Devanagari"', 'Arial', 'sans-serif'],
+        chant: ['"Noto Sans Devanagari"', '"Open Sans"', 'sans-serif'],
       },
       borderRadius: { '4xl': '2rem' },
       boxShadow: {

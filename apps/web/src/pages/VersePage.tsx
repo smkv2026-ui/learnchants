@@ -144,7 +144,7 @@ export default function VersePage() {
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-4xl font-semibold sm:text-5xl">{verse.name}</h1>
-          {verse.firstLine && <p lang="sa" className="mt-1 font-chant text-xl text-primary">{verse.firstLine}</p>}
+          {verse.firstLine && <p lang="sa" className="mt-1 font-chant text-xl text-chant">{verse.firstLine}</p>}
         </div>
         <StatusChip status={status} />
       </div>

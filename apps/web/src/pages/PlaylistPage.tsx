@@ -101,7 +101,7 @@ export default function PlaylistPage() {
                 <Badge>{p.verseCount ?? 0} verses</Badge>
               </div>
               <h1 className="text-4xl font-semibold sm:text-5xl">{p.title}</h1>
-              {p.titleNative && <p lang="sa" className="mt-1 font-chant text-2xl text-primary">{p.titleNative}</p>}
+              {p.titleNative && <p lang="sa" className="mt-1 font-chant text-2xl text-chant">{p.titleNative}</p>}
               {p.description && <p className="mt-4 whitespace-pre-line text-muted">{p.description}</p>}
               {user && progress.data && (
                 <div className="mt-6 flex items-center gap-4">

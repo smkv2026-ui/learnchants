@@ -21,7 +21,7 @@ export function CoverArt({ playlist, className = '' }: { playlist: WithId<Playli
   return (
     <div className={`relative grid h-full w-full place-items-center overflow-hidden bg-gradient-to-br ${g} ${className}`}>
       <img src="/mandala.svg" alt="" className="absolute h-[140%] w-[140%] animate-spin-slow opacity-20 invert" />
-      <span lang="sa" className="relative px-4 text-center font-chant text-3xl text-gold-200 drop-shadow">
+      <span lang="sa" className="relative px-4 text-center font-chant text-3xl text-[#f5e65a] drop-shadow">
         {playlist.titleNative || playlist.title}
       </span>
     </div>

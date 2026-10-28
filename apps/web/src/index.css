@@ -23,6 +23,9 @@
   --glow-b: 30 60 210;
   --sheen: linear-gradient(135deg, #e8337a 0%, #b23cff 50%, #2f6bff 100%);
   --on-sheen: 255 255 255;
+  /* Text colours from the welcome card: pale cyan headings, yellow Sanskrit. */
+  --heading: 178 240 236;
+  --chant: 245 230 90;
   --mandala-filter: invert(55%) sepia(90%) saturate(1800%) hue-rotate(200deg);
   --glass: 255 255 255;
   --glass-alpha: 0.06;
@@ -47,6 +50,8 @@
   --glow-b: 196 190 255;
   --sheen: linear-gradient(135deg, #ffe08a 0%, #f5a524 45%, #d9771a 100%);
   --on-sheen: 34 5 14;
+  --heading: 14 90 110;
+  --chant: 150 90 0;
   --mandala-filter: invert(78%) sepia(53%) saturate(600%) hue-rotate(358deg);
   --glass: 255 255 255;
   --glass-alpha: 0.7;
@@ -71,15 +76,18 @@
   :lang(hi),
   .font-chant {
     font-family: theme('fontFamily.chant');
+    font-weight: 600;
+    color: rgb(var(--chant));
     line-height: 1.9;
     letter-spacing: 0.01em;
   }
   h1,
   h2,
   h3 {
-    @apply font-display tracking-tight;
+    @apply font-display font-bold tracking-tight;
+    color: rgb(var(--heading));
   }
-  /* Cormorant defaults to old-style figures ("I / 3"); counters need lining digits. */
+  /* Counters need lining digits. */
   .font-display,
   h1,
   h2,
@@ -107,10 +115,7 @@
     border-color: rgb(var(--line) / var(--line-alpha));
   }
   .text-gold-gradient {
-    background: theme('backgroundImage.gold-sheen');
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
+    color: rgb(var(--chant));
   }
   .input {
     @apply w-full rounded-xl border bg-surface/60 px-4 py-3 text-ink placeholder:text-muted/60 transition;
