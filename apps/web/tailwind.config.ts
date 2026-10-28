@@ -28,9 +28,9 @@ export default {
         chant: v('chant'),
       },
       fontFamily: {
-        sans: ['"Open Sans"', '"Noto Sans Devanagari"', 'Arial', 'system-ui', 'sans-serif'],
-        display: ['"Open Sans"', '"Noto Sans Devanagari"', 'Arial', 'sans-serif'],
-        chant: ['"Noto Sans Devanagari"', '"Open Sans"', 'sans-serif'],
+        sans: ['Inter', '"Noto Sans Devanagari"', 'system-ui', 'sans-serif'],
+        display: ['"Playfair Display"', '"Noto Serif Devanagari"', 'Georgia', 'serif'],
+        chant: ['"Noto Serif Devanagari"', '"Noto Sans Devanagari"', 'serif'],
       },
       borderRadius: { '4xl': '2rem' },
       boxShadow: {

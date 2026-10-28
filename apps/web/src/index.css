@@ -21,11 +21,12 @@
   --warn: 250 204 21;
   --glow-a: 200 24 72;
   --glow-b: 30 60 210;
-  --sheen: linear-gradient(135deg, #e8337a 0%, #b23cff 50%, #2f6bff 100%);
+  --sheen: linear-gradient(135deg, #4f7cff 0%, #6a5cff 55%, #9b4dff 100%);
   --on-sheen: 255 255 255;
-  /* Text colours from the welcome card: pale cyan headings, yellow Sanskrit. */
-  --heading: 178 240 236;
-  --chant: 245 230 90;
+  /* Ivory headings with champagne-gold Sanskrit and highlights. */
+  --heading: 246 241 230;
+  --chant: 233 199 123;
+  --gold-text: linear-gradient(120deg, #f7e2a8 0%, #e3b866 50%, #c9963f 100%);
   --mandala-filter: invert(55%) sepia(90%) saturate(1800%) hue-rotate(200deg);
   --glass: 255 255 255;
   --glass-alpha: 0.06;
@@ -50,8 +51,9 @@
   --glow-b: 196 190 255;
   --sheen: linear-gradient(135deg, #ffe08a 0%, #f5a524 45%, #d9771a 100%);
   --on-sheen: 34 5 14;
-  --heading: 14 90 110;
-  --chant: 150 90 0;
+  --heading: 40 22 40;
+  --chant: 150 98 20;
+  --gold-text: linear-gradient(120deg, #b8862b 0%, #9a6a12 100%);
   --mandala-filter: invert(78%) sepia(53%) saturate(600%) hue-rotate(358deg);
   --glass: 255 255 255;
   --glass-alpha: 0.7;
@@ -76,7 +78,7 @@
   :lang(hi),
   .font-chant {
     font-family: theme('fontFamily.chant');
-    font-weight: 600;
+    font-weight: 500;
     color: rgb(var(--chant));
     line-height: 1.9;
     letter-spacing: 0.01em;
@@ -84,7 +86,7 @@
   h1,
   h2,
   h3 {
-    @apply font-display font-bold tracking-tight;
+    @apply font-display font-semibold tracking-tight;
     color: rgb(var(--heading));
   }
   /* Counters need lining digits. */
@@ -115,7 +117,10 @@
     border-color: rgb(var(--line) / var(--line-alpha));
   }
   .text-gold-gradient {
-    color: rgb(var(--chant));
+    background: var(--gold-text);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
   }
   .input {
     @apply w-full rounded-xl border bg-surface/60 px-4 py-3 text-ink placeholder:text-muted/60 transition;
