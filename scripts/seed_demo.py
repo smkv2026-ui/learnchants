@@ -97,6 +97,67 @@ def recount(db, pid: str) -> None:
     p.update({"verseCount": len(verses)})
 
 
+# Extra dummy playlists: (id, title, native, description, price or None, [(section, [(name, first line, meaning)])])
+EXTRA_PLAYLISTS = [
+    ("gayatri-mantra", "Gayatri Mantra", "गायत्री मन्त्रः", "The universal prayer for light and wisdom (Rig Veda 3.62.10).", None, [
+        ("Mantra", [
+            ("Line 1", "ॐ भूर्भुवः स्वः", "Om. Earth, sky and heaven."),
+            ("Line 2", "तत्सवितुर्वरेण्यं", "That most adorable light of the Sun,"),
+            ("Line 3", "भर्गो देवस्य धीमहि", "on the radiance of the divine we meditate;"),
+            ("Line 4", "धियो यो नः प्रचोदयात्", "may it inspire our intellect."),
+        ]),
+    ]),
+    ("ganesha-pancharatnam", "Ganesha Pancharatnam", "गणेश पञ्चरत्नम्", "Five jewels in praise of Lord Ganesha by Adi Shankaracharya.", None, [
+        ("Shlokas", [
+            ("Shloka 1", "मुदाकरात्तमोदकं सदा विमुक्तिसाधकं", "Who holds modakas joyfully in his hand and always grants liberation."),
+            ("Shloka 2", "नतेतरातिभीकरं नवोदितार्कभास्वरं", "Fearsome to the arrogant, radiant like the rising sun."),
+            ("Shloka 3", "समस्तलोकशङ्करं निरस्तदैत्यकुञ्जरं", "Who brings welfare to all worlds and destroyed the demon Gajasura."),
+        ]),
+    ]),
+    ("hanuman-chalisa", "Hanuman Chalisa", "हनुमान चालीसा", "Forty verses in praise of Sri Hanuman by Goswami Tulsidas.", 99, [
+        ("Opening Dohas", [
+            ("Doha 1", "श्रीगुरु चरन सरोज रज", "Cleansing the mirror of my mind with the dust of the Guru's lotus feet."),
+            ("Doha 2", "बुद्धिहीन तनु जानिके", "Knowing myself to be without wisdom, I remember you, Son of the Wind."),
+        ]),
+        ("Chaupais", [
+            ("Chaupai 1", "जय हनुमान ज्ञान गुन सागर", "Victory to Hanuman, ocean of wisdom and virtue."),
+            ("Chaupai 2", "राम दूत अतुलित बल धामा", "Messenger of Rama, abode of matchless strength."),
+        ]),
+    ]),
+    ("vishnu-sahasranamam", "Vishnu Sahasranamam", "विष्णु सहस्रनामम्", "The thousand names of Lord Vishnu from the Mahabharata.", 249, [
+        ("Dhyanam", [
+            ("Dhyana Shloka", "शुक्लाम्बरधरं विष्णुं", "Clad in white, the all-pervading one, bright as the moon."),
+        ]),
+        ("Stotram", [
+            ("Shloka 1", "विश्वं विष्णुर्वषट्कारो", "He is the universe, the all-pervading, the one to whom offerings go."),
+            ("Shloka 2", "पूतात्मा परमात्मा च", "The pure self, the supreme self."),
+        ]),
+    ]),
+]
+
+
+def seed_extra(db, owner_uid: str, ts, with_media: bool) -> None:
+    for order, (pid, title, native, desc, price, sections) in enumerate(EXTRA_PLAYLISTS, start=3):
+        p = db.collection("playlists").document(pid)
+        p.set({"title": title, "titleNative": native, "description": desc, "coverUrl": None,
+               "access": "paid" if price else "free", "price": price, "published": True, "sequentialUnlock": False,
+               "order": order, "verseCount": 0, "createdAt": ts, "updatedAt": ts})
+        db.collection("adminPlaylists").document(pid).set({"ownerUid": owner_uid, "createdBy": owner_uid, "createdAt": ts})
+        if price:
+            p.collection("payment").document("info").set({"upiId": "learnchants.trust@upi", "payeeName": "Learn Chants Trust"})
+        for si, (section, verses) in enumerate(sections, start=1):
+            nid = f"s{si}"
+            p.collection("nodes").document(nid).set({"parentId": None, "name": section, "description": "", "order": si})
+            for vi, (name, line, meaning) in enumerate(verses, start=1):
+                vid = f"{nid}-v{vi}"
+                p.collection("verses").document(vid).set({
+                    "nodeId": nid, "name": name, "firstLine": line, "order": vi, "hasAudio": False, "hasVideo": False, "createdAt": ts,
+                    "details": f"<p lang=\"sa\">{line}</p><p>{meaning}</p>"})
+                if with_media:
+                    store_audio(db, owner_uid, pid, vid, 3.0 + vi * 0.4)
+        recount(db, pid)
+
+
 def main() -> None:
     args = parse_args(
         "Seed demo data",
@@ -152,7 +213,7 @@ def main() -> None:
     )
     p.collection("materials").document("about").set(
         {"title": "About Sri Rudram", "type": "text", "nodeId": None, "status": "ready", "order": 1,
-         "text": "Chant slowly with attention to svaras (udātta, anudātta, svarita). Listen three times, then chant three times.", "createdAt": ts}
+         "text": "Chant slowly with attention to svaras (udātta, anudātta, svarita). Listen three times, then record yourself chanting once.", "createdAt": ts}
     )
     recount(db, pid)
 
@@ -176,6 +237,9 @@ def main() -> None:
             store_audio(db, owner_uid, pid, f"na1-v{n}", 3.0 + n * 0.5)
         store_audio(db, owner_uid, pid2, "ps-v1", 4.0)
         print("✔ sample audio stored in Firestore media chunks")
+
+    seed_extra(db, owner_uid, ts, not args.no_media)
+    print(f"✔ Seeded {len(EXTRA_PLAYLISTS)} more playlists: " + ", ".join(x[1] for x in EXTRA_PLAYLISTS))
 
     learner = get_or_create_user(auth, LEARNER_EMAIL, LEARNER_PASSWORD, "Demo Learner")
     db.collection("users").document(learner.uid).set({"displayName": "Demo Learner", "email": LEARNER_EMAIL, "createdAt": ts}, merge=True)

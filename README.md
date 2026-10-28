@@ -60,7 +60,8 @@ pnpm dev:emu                         # terminal 3: http://localhost:5173
 ```
 
 - Learner: `learner@demo.test` / `learner123`. Teacher portal: <http://localhost:5173/admin/login> with `guru@demo.test` / `guru12345`.
-- The demo has Sri Rudram (Namakam/Chamakam × 11 anuvakams, sample audio) and a paid Purusha Suktam (₹199).
+- The demo has Sri Rudram (Namakam/Chamakam × 11 anuvakams, sample audio), Gayatri Mantra and Ganesha Pancharatnam (free), and paid Purusha Suktam (₹199), Hanuman Chalisa (₹99) and Vishnu Sahasranamam (₹249).
+- Learner guide video with voice-over: `docs/learnchants-learner-guide.mp4`.
 
 ## 3. Tests and checks
 
