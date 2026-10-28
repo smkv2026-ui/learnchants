@@ -51,7 +51,7 @@ export function Tabs<T extends string>({
             className={cn(
               'relative flex min-h-[40px] items-center justify-center gap-2 whitespace-nowrap rounded-xl px-4 py-2 text-sm font-medium transition',
               stretch && 'flex-1',
-              active ? 'text-maroon-900' : 'text-muted hover:text-ink',
+              active ? 'text-on-sheen' : 'text-muted hover:text-ink',
             )}
           >
             {active && (

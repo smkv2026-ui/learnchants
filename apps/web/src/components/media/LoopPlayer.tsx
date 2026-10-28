@@ -145,7 +145,7 @@ export function LoopPlayer({ audioMediaId, videoMediaId, loops = LOOP_COUNT, aut
 
   return (
     <div className={cn('glass relative overflow-hidden rounded-4xl', compact ? 'p-4' : 'p-5 sm:p-7')}>
-      <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 animate-spin-slow rounded-full bg-[url('/mandala.svg')] bg-contain opacity-[.06]" />
+      <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 animate-spin-slow rounded-full bg-[url('/mandala.svg')] bg-contain opacity-[.1] [filter:var(--mandala-filter)]" />
       {hasBoth && (
         <div className="mb-4 flex justify-center">
           <Tabs

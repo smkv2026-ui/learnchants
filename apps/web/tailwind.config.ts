@@ -23,6 +23,7 @@ export default {
         success: v('success'),
         danger: v('danger'),
         warn: v('warn'),
+        'on-sheen': v('on-sheen'),
       },
       fontFamily: {
         sans: ['"Plus Jakarta Sans"', '"Noto Sans Devanagari"', 'system-ui', 'sans-serif'],
@@ -36,7 +37,7 @@ export default {
       },
       backgroundImage: {
         'devotional': 'radial-gradient(1200px 600px at 10% -10%, rgb(var(--glow-a) / .55), transparent 60%), radial-gradient(900px 500px at 110% 10%, rgb(var(--glow-b) / .45), transparent 60%), linear-gradient(180deg, rgb(var(--bg)) 0%, rgb(var(--bg-2)) 100%)',
-        'gold-sheen': 'linear-gradient(135deg, #ffe08a 0%, #f5a524 45%, #d9771a 100%)',
+        'gold-sheen': 'var(--sheen)',
       },
       keyframes: {
         shimmer: { '100%': { transform: 'translateX(100%)' } },

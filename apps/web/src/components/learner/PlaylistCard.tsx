@@ -6,10 +6,11 @@ import type { Playlist, WithId } from '@/lib/types';
 import { Badge, Icon, ProgressRing, TiltCard } from '@/components/ui';
 
 const GRADIENTS = [
-  'from-maroon-500 via-maroon-700 to-indigo-800',
-  'from-indigo-600 via-indigo-800 to-maroon-700',
-  'from-saffron-600 via-maroon-600 to-indigo-800',
-  'from-maroon-600 via-indigo-700 to-indigo-900',
+  // Om-logo hues: magenta-red core fading into electric blue and night.
+  'from-[#c81848] via-[#3a1a8a] to-[#0a1450]',
+  'from-[#1e3cd2] via-[#2a1470] to-[#7a0f3a]',
+  'from-[#e8337a] via-[#5b2bd0] to-[#0b1a5c]',
+  'from-[#2f6bff] via-[#1a1f6e] to-[#05071a]',
 ];
 
 export function CoverArt({ playlist, className = '' }: { playlist: WithId<Playlist>; className?: string }) {

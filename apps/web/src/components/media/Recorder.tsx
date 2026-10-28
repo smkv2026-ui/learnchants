@@ -180,10 +180,10 @@ export function Recorder({ kind, rounds, hint, maxSeconds: maxSecondsProp, confi
           </p>
           <button
             onClick={begin}
-            className="group relative grid h-24 w-24 place-items-center rounded-full bg-gradient-to-br from-maroon-400 to-maroon-600 text-white shadow-glow transition active:scale-95"
+            className="group relative grid h-24 w-24 place-items-center rounded-full bg-gradient-to-br from-accent to-accent/70 text-white shadow-glow transition active:scale-95"
             aria-label={`Start recording ${kind}`}
           >
-            <span className="absolute inset-0 animate-pulsering rounded-full bg-maroon-400/50" />
+            <span className="absolute inset-0 animate-pulsering rounded-full bg-accent/50" />
             <Icon name={kind === 'audio' ? 'mic' : 'video'} size={36} />
           </button>
           <p className="text-xs text-muted">We'll ask for {kind === 'audio' ? 'microphone' : 'camera and microphone'} permission.</p>
