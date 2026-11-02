@@ -3,9 +3,9 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { canRecord, describeMediaError, pickMimeType, type MediaKind } from '@/lib/recorder';
 import { formatDuration } from '@/lib/format';
 import { haptic } from '@/lib/celebrate';
-import { Button, Icon, IconButton, cn } from '@/components/ui';
+import { Button, Icon, cn } from '@/components/ui';
 import { analyserForStream, resumeAudio } from './audioGraph';
-import { Waveform } from './Waveform';
+import { Cymatics } from './Cymatics';
 
 export interface Recording {
   blob: Blob;
@@ -14,6 +14,8 @@ export interface Recording {
   url: string;
   fileName?: string;
 }
+
+const COUNT_MS = 700;
 
 type Phase = 'idle' | 'countdown' | 'recording' | 'review' | 'error';
 
@@ -30,7 +32,11 @@ interface RecorderProps {
   onDiscard?: () => void;
 }
 
-/** Browser recorder with live waveform / camera preview, timer, re-record and preview. */
+/**
+ * Browser recorder with live cymatics / camera preview, timer, re-record and preview.
+ * Idle, countdown and recording share one fixed-size stage so nothing on the
+ * screen jumps when recording starts.
+ */
 export function Recorder({ kind, rounds, hint, maxSeconds: maxSecondsProp, confirmLabel = 'Use this recording', busy, onConfirm, onDiscard }: RecorderProps) {
   const [phase, setPhase] = useState<Phase>('idle');
   const [error, setError] = useState('');
@@ -90,7 +96,7 @@ export function Recorder({ kind, rounds, hint, maxSeconds: maxSecondsProp, confi
       for (let n = 3; n > 0; n--) {
         setCount(n);
         haptic(10);
-        await new Promise((r) => setTimeout(r, 700));
+        await new Promise((r) => setTimeout(r, COUNT_MS));
       }
       startRecording(s);
     } catch (err) {
@@ -157,86 +163,114 @@ export function Recorder({ kind, rounds, hint, maxSeconds: maxSecondsProp, confi
 
   const recording = phase === 'recording';
 
+  const live = phase === 'idle' || phase === 'countdown' || phase === 'recording';
+  const STAGE = 232;
+
+  // One circular control that morphs: mic (idle) → 3·2·1 (countdown) → stop (recording).
+  const control = (
+    <motion.button
+      layout
+      type="button"
+      onClick={phase === 'idle' ? begin : recording ? stop : undefined}
+      disabled={phase === 'countdown'}
+      aria-label={phase === 'idle' ? `Start recording ${kind}` : recording ? 'Stop recording' : `Recording starts in ${count}`}
+      className={cn(
+        'relative z-10 grid h-24 w-24 place-items-center rounded-full text-white shadow-glow transition-colors duration-500',
+        recording ? 'bg-danger' : 'bg-gradient-to-br from-accent to-accent/70',
+      )}
+      whileTap={{ scale: 0.94 }}
+    >
+      {phase === 'idle' && <span className="absolute inset-0 animate-pulsering rounded-full bg-accent/50" />}
+      {phase === 'countdown' && (
+        <svg className="absolute -inset-2 h-[calc(100%+1rem)] w-[calc(100%+1rem)] -rotate-90" viewBox="0 0 100 100" aria-hidden="true">
+          <circle cx="50" cy="50" r="47" fill="none" stroke="rgb(255 255 255 / .15)" strokeWidth="3" />
+          <motion.circle
+            cx="50" cy="50" r="47" fill="none" stroke="rgb(var(--chant))" strokeWidth="3" strokeLinecap="round"
+            initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: (3 * COUNT_MS) / 1000, ease: 'linear' }}
+          />
+        </svg>
+      )}
+      <AnimatePresence mode="popLayout" initial={false}>
+        <motion.span
+          key={phase === 'countdown' ? `c${count}` : phase}
+          initial={{ opacity: 0, scale: 0.6 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 1.4 }}
+          transition={{ duration: 0.25 }}
+          className="grid place-items-center"
+        >
+          {phase === 'countdown' ? (
+            <span className="num text-4xl font-bold">{count}</span>
+          ) : (
+            <Icon name={recording ? 'stop' : kind === 'audio' ? 'mic' : 'video'} size={recording ? 30 : 36} />
+          )}
+        </motion.span>
+      </AnimatePresence>
+    </motion.button>
+  );
+
+  const status = (
+    <div className="flex h-6 items-center justify-center text-sm" aria-live="polite">
+      {phase === 'idle' && <span className="text-muted">Tap the circle when you're ready</span>}
+      {phase === 'countdown' && <span className="font-medium text-ink">Get ready…</span>}
+      {recording && (
+        <span className="flex items-center gap-2 font-semibold text-danger">
+          <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-danger" /> Recording · <span className="tabular-nums">{formatDuration(elapsed)}</span>
+        </span>
+      )}
+    </div>
+  );
+
   return (
     <div className="glass relative overflow-hidden rounded-4xl p-5 sm:p-7">
       {kind === 'video' && (
-        <video
-          ref={preview}
-          muted
-          playsInline
-          className={cn(
-            'mb-4 aspect-video w-full -scale-x-100 rounded-3xl bg-black object-cover',
-            phase !== 'countdown' && phase !== 'recording' && 'hidden',
-          )}
-        />
-      )}
-
-      {phase === 'idle' && (
-        <div className="flex flex-col items-center gap-4 py-4 text-center">
-          <p className="max-w-sm text-sm text-muted">
-            {hint ?? (rounds
-              ? `Chant the verse ${rounds} times in one recording. Tap “Next round” after each repetition.`
-              : `Record ${kind === 'audio' ? 'audio' : 'video'} in your browser.`)}
-          </p>
-          <button
-            onClick={begin}
-            className="group relative grid h-24 w-24 place-items-center rounded-full bg-gradient-to-br from-accent to-accent/70 text-white shadow-glow transition active:scale-95"
-            aria-label={`Start recording ${kind}`}
-          >
-            <span className="absolute inset-0 animate-pulsering rounded-full bg-accent/50" />
-            <Icon name={kind === 'audio' ? 'mic' : 'video'} size={36} />
-          </button>
-          <p className="text-xs text-muted">We'll ask for {kind === 'audio' ? 'microphone' : 'camera and microphone'} permission.</p>
+        <div className={cn('relative mb-3 aspect-video w-full overflow-hidden rounded-3xl bg-black', !live && 'hidden')}>
+          <video
+            ref={preview}
+            muted
+            playsInline
+            className={cn('h-full w-full -scale-x-100 object-cover transition-opacity duration-500', phase === 'idle' ? 'opacity-0' : 'opacity-100')}
+          />
+          {phase === 'idle' && <div className="absolute inset-0 bg-[url('/mandala.svg')] bg-[length:60%] bg-center bg-no-repeat opacity-[.12] [filter:var(--mandala-filter)]" />}
+          <div className={cn('absolute inset-x-0 flex justify-center transition-all duration-500', recording ? 'bottom-4' : 'bottom-1/2 translate-y-1/2')}>
+            {control}
+          </div>
         </div>
       )}
 
-      <AnimatePresence>
-        {phase === 'countdown' && (
-          <motion.div key={count} initial={{ scale: 1.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ opacity: 0 }} className="py-8 text-center">
-            <span className="text-gold-gradient num text-7xl font-bold">{count}</span>
-            <p className="mt-2 text-sm text-muted">Get ready…</p>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {recording && (
-        <div className="flex flex-col items-center gap-4">
-          <div className="flex items-center gap-2 text-sm font-semibold text-danger" aria-live="polite">
-            <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-danger" /> Recording · <span className="tabular-nums">{formatDuration(elapsed)}</span>
-          </div>
-          {rounds && (
-            <div className="text-center" aria-live="polite">
-              <p className="text-xs uppercase tracking-[.25em] text-muted">Round</p>
-              <p className="num text-5xl font-bold">
-                <span className="text-gold-gradient">{round}</span>
-                <span className="text-2xl text-muted"> / {rounds}</span>
-              </p>
-              <div className="mt-2 flex justify-center gap-2">
-                {Array.from({ length: rounds }).map((_, i) => (
-                  <span key={i} className={cn('h-2.5 rounded-full transition-all', i < round - 1 ? 'w-8 bg-gold-sheen' : i === round - 1 ? 'w-8 bg-danger/70' : 'w-2.5 bg-ink/15')} />
-                ))}
+      {live && (
+        <div className="flex flex-col items-center gap-3 text-center">
+          {(hint || rounds) && (
+            // Stays in place (faded) after "start" so the stage below never jumps.
+            <p className={cn('max-w-sm text-sm text-muted transition-opacity duration-500', phase !== 'idle' && 'opacity-0')} aria-hidden={phase !== 'idle'}>
+              {hint ?? `Chant the verse ${rounds} times in one recording. Tap “Next round” after each repetition.`}
+            </p>
+          )}
+          {kind === 'audio' && (
+            <div className="relative grid place-items-center" style={{ width: STAGE, height: STAGE, maxWidth: '100%' }}>
+              <div className={cn('absolute inset-0 transition-opacity duration-700', recording ? 'opacity-100' : phase === 'countdown' ? 'opacity-60' : 'opacity-30')}>
+                <Cymatics analyser={analyser} active={recording} size={STAGE} />
               </div>
+              {control}
             </div>
           )}
-          {kind === 'audio' && <Waveform analyser={analyser} active height={88} />}
-          <div className="flex items-center gap-4">
-            {rounds ? (
-              <>
-                <IconButton icon="stop" label="Stop recording" size="lg" variant="secondary" onClick={stop} />
-                <Button size="xl" icon={round >= rounds ? 'check' : 'chevron-right'} onClick={nextRound}>
-                  {round >= rounds ? 'Finish' : 'Next round'}
-                </Button>
-              </>
-            ) : (
-              <button
-                onClick={stop}
-                aria-label="Stop recording"
-                className="grid h-20 w-20 place-items-center rounded-full bg-danger text-white shadow-lg transition active:scale-95"
-              >
-                <Icon name="stop" size={30} />
-              </button>
-            )}
-          </div>
+          {status}
+          {rounds && recording ? (
+            <div className="flex items-center gap-3">
+              <span className="num text-sm text-muted">Round {round} / {rounds}</span>
+              <Button size="sm" icon={round >= rounds ? 'check' : 'chevron-right'} onClick={nextRound}>
+                {round >= rounds ? 'Finish' : 'Next round'}
+              </Button>
+            </div>
+          ) : (
+            <p className="h-5 text-xs text-muted">
+              {phase === 'idle'
+                ? `We'll ask for ${kind === 'audio' ? 'microphone' : 'camera and microphone'} permission.`
+                : recording
+                  ? 'Tap stop when you finish chanting.'
+                  : 'Recording starts after the count.'}
+            </p>
+          )}
         </div>
       )}
 

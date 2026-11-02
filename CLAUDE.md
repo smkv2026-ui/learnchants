@@ -16,7 +16,7 @@ Owner decision (Oct 2026): run on the free Spark plan and **give up teacher anon
 - **Local dev**: Emulator Suite (Auth, Firestore, Hosting).
 
 ## Frontend Stack
-React 18 + TypeScript + Vite (build tooling only), `vite-plugin-pwa` (Workbox), React Router, TanStack Query, Zustand, Tailwind CSS, Framer Motion, `react-hook-form` + `zod`, `canvas-confetti`, `dnd-kit`, `qrcode.react`, Firebase JS SDK v10 (modular imports: app, auth, firestore, app-check). Live waveforms use the Web Audio AnalyserNode. Enable Firestore offline persistence.
+React 18 + TypeScript + Vite (build tooling only), `vite-plugin-pwa` (Workbox), React Router, TanStack Query, Zustand, Tailwind CSS, Framer Motion, `react-hook-form` + `zod`, `canvas-confetti`, `dnd-kit`, `qrcode.react`, Firebase JS SDK v10 (modular imports: app, auth, firestore, app-check). Live circular cymatics (Chladni-plate sand figures) use the Web Audio AnalyserNode. Enable Firestore offline persistence.
 
 ## Repository Layout
 ```
@@ -75,7 +75,7 @@ React 18 + TypeScript + Vite (build tooling only), `vite-plugin-pwa` (Workbox), 
 ## Frontend Conventions
 - Mobile-first; test at 360px, 768px, 1280px.
 - Visual design: devotional-modern; saffron/gold on deep maroon/indigo; subtle mandala patterns; glassmorphism; dark and light themes via CSS variables.
-- Interactive polish: Framer Motion transitions, animated progress rings, live waveform, confetti on approval/completion, skeleton loaders, illustrated empty states, reduced-motion support.
+- Interactive polish: Framer Motion transitions, animated progress rings, live cymatics, confetti on approval/completion, skeleton loaders, illustrated empty states, reduced-motion support.
 - Indic script support (Noto Sans Devanagari etc.; `lang` attributes). WCAG 2.1 AA.
 - PWA: manifest, icons, standalone display, service worker with offline shell and metadata caching, install prompt, update toast.
 - Server state via TanStack Query + Firestore listeners; UI state via Zustand.

@@ -1,4 +1,4 @@
-import { collection, deleteDoc, doc, getDoc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDoc, getDocs, limit, query, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import { extensionFor } from '@/lib/recorder';
 import { deleteChunks, putChunked, readChunked, type MediaMeta } from './chunks';
@@ -195,7 +195,11 @@ export async function deleteMedia(mediaId: string | null | undefined): Promise<v
   const snap = await getDoc(ref).catch(() => null);
   if (!snap?.exists()) return;
   const m = snap.data() as MediaDoc;
-  if (m.store === 'drive' && m.driveFileId && driveConnected()) await trashItem(m.driveFileId);
+  if (m.store === 'drive' && m.driveFileId && driveConnected()) {
+    // A copied verse shares the Drive file: only trash it when no other media doc uses it.
+    const others = await getDocs(query(collection(db, 'media'), where('driveFileId', '==', m.driveFileId), limit(2)));
+    if (!others.docs.some((d) => d.id !== mediaId)) await trashItem(m.driveFileId);
+  }
   await deleteChunks(mediaId).catch(() => undefined);
   await deleteDoc(ref);
   urlCache.delete(mediaId);
@@ -228,3 +232,18 @@ export async function deleteVerseMedia(pid: string, vid: string): Promise<void> 
   await deleteMedia(v.data()?.videoMediaId);
 }
 
+
+/** Admin: duplicate a file for a copied verse (Firestore bytes are copied; a Drive file is shared). */
+export async function copyMedia(mediaId: string | null | undefined, vid: string): Promise<string | null> {
+  if (!mediaId) return null;
+  const snap = await getDoc(doc(db, 'media', mediaId));
+  if (!snap.exists()) return null;
+  const m = snap.data() as MediaDoc & MediaMeta & { durationSec?: number | null };
+  const meta: MediaMeta = { purpose: m.purpose, pid: m.pid, kind: m.kind ?? null, mimeType: m.mimeType, uploaderUid: auth.currentUser!.uid, vid, fileName: m.fileName ?? null };
+  if (m.store === 'drive' && m.driveFileId) {
+    const ref = doc(collection(db, 'media'));
+    await setDoc(ref, { ...meta, learnerUid: null, store: 'drive', driveFileId: m.driveFileId, size: m.size, chunkCount: 0, status: 'ready', durationSec: m.durationSec ?? null, createdAt: serverTimestamp() });
+    return ref.id;
+  }
+  return putChunked(await readChunked(mediaId, m.chunkCount, m.mimeType), meta, { durationSec: m.durationSec ?? null });
+}

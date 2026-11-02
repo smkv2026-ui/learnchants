@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { auth, db } from '@/lib/firebase';
 import { deleteVerseMedia } from '@/lib/media';
 import { renameEntityFolders } from '@/lib/media/drive';
-import { recountVerses } from '@/lib/ops/content';
+import { copyVerse, moveVerse, recountVerses } from '@/lib/ops/content';
 import { errorMessage } from '@/lib/errors';
 import { buildTree, byOrder, descendants, reorder, type TreeNode } from '@/lib/tree';
 import type { NodeDoc, Verse, WithId } from '@/lib/types';
@@ -26,6 +26,7 @@ interface Ctx {
   onMove: (node: WithId<NodeDoc>) => void;
   onDelete: (node: WithId<NodeDoc>) => void;
   onDeleteVerse: (verse: WithId<Verse>) => void;
+  onRelocateVerse: (verse: WithId<Verse>, mode: 'move' | 'copy') => void;
 }
 
 async function saveOrder(pid: string, sub: 'nodes' | 'verses', items: { id: string; order?: number }[], from: string, to: string) {
@@ -76,6 +77,7 @@ function InlineName({ pid, node }: { pid: string; node: WithId<NodeDoc> }) {
 }
 
 function VerseRows({ ctx, nodeId }: { ctx: Ctx; nodeId: string }) {
+  const navigate = useNavigate();
   const items = ctx.verses.filter((v) => v.nodeId === nodeId).sort(byOrder);
   if (!items.length) return null;
   return (
@@ -92,7 +94,16 @@ function VerseRows({ ctx, nodeId }: { ctx: Ctx; nodeId: string }) {
           </Link>
           {v.hasAudio ? <Badge tone="success">audio</Badge> : <Badge tone="warn">no audio</Badge>}
           {v.hasVideo && <Badge tone="indigo">video</Badge>}
-          <IconButton icon="trash" label={`Delete verse ${v.name}`} size="sm" onClick={() => ctx.onDeleteVerse(v)} />
+          <ActionMenu
+            className="shrink-0"
+            label={`Actions for ${v.name}`}
+            actions={[
+              { label: 'Edit', icon: 'edit', onSelect: () => navigate(`/admin/playlists/${ctx.pid}/verses/${v.id}`) },
+              { label: 'Move to…', icon: 'external', onSelect: () => ctx.onRelocateVerse(v, 'move') },
+              { label: 'Copy to…', icon: 'copy', onSelect: () => ctx.onRelocateVerse(v, 'copy') },
+              { label: 'Delete', icon: 'trash', onSelect: () => ctx.onDeleteVerse(v), danger: true },
+            ]}
+          />
         </div>
       )}
     />
@@ -174,6 +185,7 @@ export function StructureTab({ pid }: { pid: string }) {
   const [moving, setMoving] = useState<WithId<NodeDoc> | null>(null);
   const [deleting, setDeleting] = useState<WithId<NodeDoc> | null>(null);
   const [deletingVerse, setDeletingVerse] = useState<WithId<Verse> | null>(null);
+  const [relocating, setRelocating] = useState<{ verse: WithId<Verse>; mode: 'move' | 'copy' } | null>(null);
   const [name, setName] = useState('');
   const [bulk, setBulk] = useState({ on: false, prefix: 'Anuvakam', count: '11' });
   const [busy, setBusy] = useState(false);
@@ -232,6 +244,7 @@ export function StructureTab({ pid }: { pid: string }) {
     onMove: setMoving,
     onDelete: setDeleting,
     onDeleteVerse: setDeletingVerse,
+    onRelocateVerse: (verse, mode) => setRelocating({ verse, mode }),
   };
 
   const step1 = nodes.data.length > 0;
@@ -322,6 +335,20 @@ export function StructureTab({ pid }: { pid: string }) {
         }}
       />
 
+      {relocating && (
+        <VerseRelocateDialog
+          pid={pid}
+          verse={relocating.verse}
+          mode={relocating.mode}
+          tree={tree}
+          onDone={(nodeId) => {
+            setExpanded((e) => new Set(e).add(nodeId));
+            setRelocating(null);
+          }}
+          onClose={() => setRelocating(null)}
+        />
+      )}
+
       <MoveDialog pid={pid} node={moving} nodes={nodes.data} onClose={() => setMoving(null)} />
 
       <ConfirmDialog
@@ -380,6 +407,76 @@ function MoveDialog({ pid, node, nodes, onClose }: { pid: string; node: WithId<N
           <option key={n.id} value={n.id}>{n.name}</option>
         ))}
       </select>
+    </Modal>
+  );
+}
+
+/** Move or copy a verse to any section or sub-section, picked from the tree. */
+function VerseRelocateDialog({ pid, verse, mode, tree, onDone, onClose }: {
+  pid: string;
+  verse: WithId<Verse>;
+  mode: 'move' | 'copy';
+  tree: TreeNode[];
+  onDone: (nodeId: string) => void;
+  onClose: () => void;
+}) {
+  const [target, setTarget] = useState(mode === 'copy' ? verse.nodeId : '');
+  const [busy, setBusy] = useState(false);
+  const rows: TreeNode[] = [];
+  const walk = (list: TreeNode[]) => list.forEach((n) => { rows.push(n); walk(n.children); });
+  walk(tree);
+  const submit = async () => {
+    if (!target) return;
+    setBusy(true);
+    try {
+      if (mode === 'move') await moveVerse(pid, verse.id, target);
+      else await copyVerse(pid, verse.id, target);
+      const where = rows.find((r) => r.id === target)?.name;
+      toast.success(mode === 'move' ? `Moved to “${where}”` : `Copied to “${where}”`);
+      onDone(target);
+    } catch (err) {
+      toast.error(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={`${mode === 'move' ? 'Move' : 'Copy'} “${verse.name}”`}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose} disabled={busy}>Cancel</Button>
+          <Button icon={mode === 'move' ? 'external' : 'copy'} loading={busy} disabled={!target || (mode === 'move' && target === verse.nodeId)} onClick={() => void submit()}>
+            {mode === 'move' ? 'Move here' : 'Copy here'}
+          </Button>
+        </>
+      }
+    >
+      <p className="mb-3 text-sm text-muted">
+        {mode === 'move' ? 'Choose the section or sub-section this verse should live in.' : 'A copy (with its own audio/video) is added at the end of the chosen section.'}
+      </p>
+      <div role="radiogroup" aria-label="Destination section" className="max-h-[50vh] space-y-1 overflow-y-auto pr-1">
+        {rows.map((n) => {
+          const current = n.id === verse.nodeId;
+          return (
+            <label
+              key={n.id}
+              className={cn(
+                'flex cursor-pointer items-center gap-2 rounded-xl px-3 py-2 text-sm transition',
+                target === n.id ? 'bg-primary/15 text-ink' : 'hover:bg-ink/5',
+              )}
+              style={{ paddingLeft: 12 + n.depth * 20 }}
+            >
+              <input type="radio" name="dest" className="accent-[rgb(var(--primary))]" checked={target === n.id} onChange={() => setTarget(n.id)} />
+              <Icon name="folder" size={16} className="text-primary" />
+              <span className="flex-1 truncate">{n.name}</span>
+              {current && <Badge>current</Badge>}
+            </label>
+          );
+        })}
+      </div>
     </Modal>
   );
 }

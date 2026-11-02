@@ -7,7 +7,7 @@ import { initialLoop, LOOP_COUNT, loopReducer, shouldReplay, type LoopState } fr
 import { haptic } from '@/lib/celebrate';
 import { Icon, IconButton, Spinner, Tabs, cn } from '@/components/ui';
 import { analyserForElement, resumeAudio } from './audioGraph';
-import { Waveform } from './Waveform';
+import { Cymatics } from './Cymatics';
 
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5];
 
@@ -235,7 +235,7 @@ export function LoopPlayer({ audioMediaId, videoMediaId, loops = LOOP_COUNT, aut
             </div>
           </div>
 
-          {mode === 'audio' && <Waveform analyser={analyser} active={playing} height={compact ? 64 : 96} className="my-2" />}
+          {mode === 'audio' && <Cymatics analyser={analyser} active={playing} size={compact ? 180 : 260} className="mx-auto my-2" />}
 
           <div className="mt-2 flex items-center gap-3 text-xs tabular-nums text-muted">
             <span>{formatDuration(pos.t)}</span>

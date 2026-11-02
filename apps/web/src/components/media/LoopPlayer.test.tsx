@@ -5,7 +5,7 @@ vi.mock('@/hooks/useMediaUrl', () => ({
   useMediaUrl: () => ({ data: { url: '/media/token', expiresAt: 0 }, isLoading: false, error: null, isFetching: false, refetch: vi.fn() }),
 }));
 vi.mock('./audioGraph', () => ({ analyserForElement: () => null, resumeAudio: async () => undefined }));
-vi.mock('./Waveform', () => ({ Waveform: () => null }));
+vi.mock('./Cymatics', () => ({ Cymatics: () => null }));
 
 import { LoopPlayer } from './LoopPlayer';
 
