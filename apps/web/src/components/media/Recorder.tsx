@@ -6,6 +6,7 @@ import { haptic } from '@/lib/celebrate';
 import { Button, Icon, cn } from '@/components/ui';
 import { analyserForStream, resumeAudio } from './audioGraph';
 import { Cymatics } from './Cymatics';
+import { CymaticsAudio } from './CymaticsAudio';
 
 export interface Recording {
   blob: Blob;
@@ -278,7 +279,7 @@ export function Recorder({ kind, rounds, hint, maxSeconds: maxSecondsProp, confi
         <div className="flex flex-col gap-4">
           <p className="text-center text-sm text-muted">Listen back before you continue · {formatDuration(rec.durationSec)}</p>
           {kind === 'audio' ? (
-            <audio src={rec.url} controls className="w-full" />
+            <CymaticsAudio src={rec.url} size={200} />
           ) : (
             <video src={rec.url} controls playsInline className="aspect-video w-full rounded-3xl bg-black" />
           )}

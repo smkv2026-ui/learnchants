@@ -39,7 +39,7 @@ function Replies({ sid }: { sid: string }) {
           {r.text && <p className="whitespace-pre-wrap text-sm">{r.text}</p>}
           {r.mediaId && (
             <div className="mt-2">
-              <MediaPlayer mediaId={r.mediaId} kind={r.kind} />
+              <MediaPlayer mediaId={r.mediaId} kind={r.kind} size={140} />
             </div>
           )}
         </li>
