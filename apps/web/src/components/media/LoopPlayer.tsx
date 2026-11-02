@@ -57,11 +57,16 @@ export function LoopPlayer({ audioMediaId, videoMediaId, loops = LOOP_COUNT, aut
   const play = useCallback(async (fromGesture: boolean) => {
     const m = el.current;
     if (!m) return;
-    if (fromGesture) {
+    // Cross-origin (Drive) media would play silently through Web Audio without
+    // CORS, so the live cymatics are only wired for local (blob) media. On the
+    // automatic start they are wired only if the audio context is allowed to
+    // run (the user has interacted with the page); otherwise routing the element
+    // through a suspended context would mute it, so it waits for the first tap.
+    if (!analyser && !url.data?.external) {
+      const running = await resumeAudio();
+      if (fromGesture || running) setAnalyser(analyserForElement(m));
+    } else if (fromGesture) {
       await resumeAudio();
-      // Cross-origin (Drive) media would play silently through Web Audio without
-      // CORS, so the live waveform is only wired for local (blob) media.
-      if (!analyser && !url.data?.external) setAnalyser(analyserForElement(m));
     }
     m.playbackRate = speed;
     try {

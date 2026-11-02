@@ -42,7 +42,13 @@ export function analyserForStream(stream: MediaStream): { analyser: AnalyserNode
   return { analyser, dispose: () => src.disconnect() };
 }
 
-export async function resumeAudio(): Promise<void> {
+/** Resume the shared context; true when it is running (audio can be routed through it). */
+export async function resumeAudio(): Promise<boolean> {
   const c = audioContext();
-  if (c && c.state === 'suspended') await c.resume().catch(() => undefined);
+  if (!c) return false;
+  if (c.state === 'suspended') {
+    // Without a user gesture the browser may keep it suspended: don't wait forever.
+    await Promise.race([c.resume().catch(() => undefined), new Promise((r) => setTimeout(r, 300))]);
+  }
+  return c.state === 'running';
 }

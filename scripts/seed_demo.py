@@ -38,7 +38,11 @@ NAMAKAM_A1 = [
 
 
 def tone_wav(seconds: float = 4.0, base: float = 136.1, rate: int = 22050) -> bytes:
-    """A gentle 'Om'-like drone (136.1 Hz + harmonics) with fade in/out."""
+    """A chant-like sample: syllables on three svara pitches (anudātta, udātta,
+    svarita) with soft attacks and short pauses, so the cymatics have something
+    to follow."""
+    svaras = [1.0, 1.122, 0.891, 1.0, 1.122, 1.0, 0.891, 1.0]
+    syllable, gap = 0.42, 0.08
     frames = int(seconds * rate)
     buf = io.BytesIO()
     with wave.open(buf, "wb") as w:
@@ -46,15 +50,17 @@ def tone_wav(seconds: float = 4.0, base: float = 136.1, rate: int = 22050) -> by
         w.setsampwidth(2)
         w.setframerate(rate)
         out = bytearray()
+        phase = 0.0
         for i in range(frames):
             t = i / rate
-            env = min(1.0, t / 0.4, (seconds - t) / 0.6)
-            s = (
-                0.55 * math.sin(2 * math.pi * base * t)
-                + 0.25 * math.sin(2 * math.pi * base * 2 * t)
-                + 0.12 * math.sin(2 * math.pi * base * 3 * t) * (0.6 + 0.4 * math.sin(2 * math.pi * 0.5 * t))
-            )
-            out += struct.pack("<h", int(max(-1, min(1, s * env * 0.6)) * 32767))
+            k, pos = divmod(t, syllable + gap)
+            f = base * svaras[int(k) % len(svaras)]
+            phase += 2 * math.pi * f / rate
+            env = 0.0 if pos > syllable else min(1.0, pos / 0.05, (syllable - pos) / 0.12)
+            env *= min(1.0, (seconds - t) / 0.3)
+            vowel = 0.6 + 0.4 * math.sin(2 * math.pi * 3 * t)  # slow timbre change
+            s_ = 0.55 * math.sin(phase) + 0.28 * math.sin(2 * phase) + 0.14 * vowel * math.sin(3 * phase) + 0.08 * math.sin(5 * phase)
+            out += struct.pack("<h", int(max(-1, min(1, s_ * env * 0.6)) * 32767))
         w.writeframes(bytes(out))
     return buf.getvalue()
 
